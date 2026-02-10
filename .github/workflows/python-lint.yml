@@ -16,7 +16,7 @@ jobs:
           args: "format --check"
       - uses: astral-sh/ruff-action@v3
         with:
-          args: "check"
+          args: "check -v" 
 
   type-check:
     name: Type Check
