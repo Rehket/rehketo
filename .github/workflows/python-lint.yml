@@ -28,8 +28,12 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version-file: ".python-version"
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: "auto"
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
       - name: Run mypy
-        run: uv run mypy fastapp --ignore-missing-imports --no-error-summary || true
+        run: uv run mypy rehketo --ignore-missing-imports --no-error-summary || true
