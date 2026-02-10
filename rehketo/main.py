@@ -18,33 +18,32 @@ security = HTTPBearer()
 
 load_dotenv()
 
-CLIENT_ID=getenv("CLIENT_ID")
-TENANT_ID=getenv("TENANT_ID")
+CLIENT_ID = getenv("CLIENT_ID")
+TENANT_ID = getenv("TENANT_ID")
 
-AUTHORITY=f"https://login.microsoftonline.com/{TENANT_ID}"
-JWKS_URL=f"{AUTHORITY}/discovery/v2.0/keys"
-ISSUER=f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
+AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
+JWKS_URL = f"{AUTHORITY}/discovery/v2.0/keys"
+ISSUER = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
 SCOPES = {
-        f"api://{CLIENT_ID}/Chat.Write": "Write Chats",
-        f"api://{CLIENT_ID}/Chat.Read": "Read Chats",
-    }
+    f"api://{CLIENT_ID}/Chat.Write": "Write Chats",
+    f"api://{CLIENT_ID}/Chat.Read": "Read Chats",
+}
 
 
 _jwks_client = jwt.PyJWKClient(JWKS_URL)
-
 
 
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
     authorizationUrl=f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/authorize",
     tokenUrl=f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token",
     scopes=SCOPES,
-    auto_error=False
+    auto_error=False,
 )
 
-def validate_token( 
-    request: Request,
-    oauth2_token: str | None = Depends(oauth2_scheme)
-    ) -> Dict:
+
+def validate_token(
+    request: Request, oauth2_token: str | None = Depends(oauth2_scheme)
+) -> Dict:
 
     token = oauth2_token
     if not token:
@@ -60,7 +59,7 @@ def validate_token(
             signing_key.key,
             algorithms=["RS256"],
             audience=CLIENT_ID,
-            issuer=ISSUER
+            issuer=ISSUER,
         )
         return payload
     except jwt.ExpiredSignatureError:
@@ -75,6 +74,7 @@ def require_role(required_role: str):
         if required_role not in roles:
             raise HTTPException(status_code=403, detail="Insufficient role")
         return token_data
+
     return role_checker
 
 
@@ -84,6 +84,7 @@ def require_scope(required_scope: str):
         scopes = token_data.get("scp", "").split()
         if required_scope not in scopes:
             raise HTTPException(status_code=403, detail="Insufficient scope")
+
     return scope_checker
 
 
@@ -92,9 +93,9 @@ app = FastAPI(
     swagger_ui_init_oauth={
         "client_id": CLIENT_ID,
         "scopes": " ".join(SCOPES.keys()),
-        "usePkceWithAuthorizationCodeGrant": True
+        "usePkceWithAuthorizationCodeGrant": True,
     },
-    swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect"
+    swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect",
 )
 
 
@@ -110,6 +111,7 @@ async def read_secret(user: dict = Depends(require_role("Chat.User"))):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
