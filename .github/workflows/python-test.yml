@@ -1,0 +1,175 @@
+name: Python Tests
+
+# on:
+#   push:
+#     branches: [main, master, dev*]
+#   pull_request:
+#     branches: [main, master, dev*]
+
+env:
+  PYTHON_VERSION: "3.14"
+  configEnvironment: test
+
+jobs:
+  # ==========================================================================
+  # Unit Tests - Fast, no external dependencies
+  # ==========================================================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+
+      - name: Run unit tests
+        run: |
+          uv run pytest tests/unit -v --cov=fastapp --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+
+  # ==========================================================================
+  # Integration Tests - Requires PostgreSQL
+  # ==========================================================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    
+    env:
+      POSTGRES_DB: apex_search_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+
+      - name: Start PostgreSQL via Docker Compose
+        run: |
+          docker compose --profile testing up -d postgres_db
+          docker compose --profile testing ps
+
+      - name: Wait for PostgreSQL to be healthy
+        run: |
+          echo "Waiting for PostgreSQL to be healthy..."
+          timeout 60 bash -c 'until docker compose --profile testing ps postgres_db | grep -q "healthy"; do sleep 2; done'
+          echo "PostgreSQL is ready!"
+
+      - name: Run database migrations
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        run: |
+          uv run alembic upgrade head
+
+      - name: Run integration tests (database only)
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        run: |
+          uv run pytest tests/integration -v --ignore=tests/integration/test_api_integration.py -m "not integration"
+
+      - name: Stop services
+        if: always()
+        run: docker compose --profile testing down -v
+
+  # ==========================================================================
+  # Full Integration Tests - Requires PostgreSQL + Mockoon
+  # ==========================================================================
+  full-integration-tests:
+    name: Full Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    env:
+      POSTGRES_DB: apex_search_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+
+      - name: Start services via Docker Compose
+        run: |
+          docker compose --profile testing up -d postgres_db mockoon
+          docker compose --profile testing ps
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for PostgreSQL to be healthy..."
+          timeout 60 bash -c 'until docker compose --profile testing ps postgres_db | grep -q "healthy"; do sleep 2; done'
+          echo "PostgreSQL is ready!"
+          
+          echo "Waiting for Mockoon to be healthy..."
+          timeout 30 bash -c 'until docker compose --profile testing ps mockoon | grep -q "healthy"; do sleep 2; done'
+          echo "Mockoon is ready!"
+
+      - name: Run database migrations
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        run: |
+          uv run alembic upgrade head
+
+      - name: Run full integration tests
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          AZURE_SEARCH_ENDPOINT: http://localhost:3001
+          AZURE_OPENAI_ENDPOINT: http://localhost:3001
+          AZURE_SEARCH_API_KEY: test-api-key
+          AZURE_OPENAI_API_KEY: test-api-key
+        run: |
+          uv run pytest tests/integration -v -m "integration"
+
+      - name: Stop services
+        if: always()
+        run: docker compose --profile testing down -v
+

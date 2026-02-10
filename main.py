@@ -1,8 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Security
-from fastapi.security import HTTPBearer, OAuth2AuthorizationCodeBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.security import HTTPBearer, OAuth2AuthorizationCodeBearer
 import jwt
 import logging
-from functools import lru_cache
 from dotenv import load_dotenv
 from os import getenv
 from typing import Dict
