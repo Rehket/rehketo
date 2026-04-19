@@ -70,7 +70,7 @@
 
 ### Deployment shape
 
-Docker Compose at the repository root (`D:\Workspace\rehketo`), services:
+Docker Compose lives under `rehketo-api/deploy/` (tracked in the rehketo-api git repo, which owns local-dev orchestration for v1). Services:
 
 - `postgres` — single instance. Two databases: `rehketo` for the app (schema plus LangGraph checkpointer tables), `bifrost` for Bifrost's governance and state. Named volume `pgdata`. No cross-database foreign keys.
 - `bifrost` — self-hosted Bifrost image. Config file mounted read-only. Named volume for any persistent state it keeps outside postgres.

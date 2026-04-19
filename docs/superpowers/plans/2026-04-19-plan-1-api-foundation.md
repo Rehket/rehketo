@@ -18,17 +18,20 @@ Before executing this plan:
 
 1. **Entra app registrations already exist.** The repository's `.env` already contains the API app's `CLIENT_ID` and `TENANT_ID`. You will need to register (or retrieve) the **client secret** for the API app and add **redirect URI** `http://localhost:8000/auth/callback` to the app registration. A separate SPA app registration exists for rehketo-ui but is not needed for this plan.
 2. **Local tooling:** Docker Desktop, `uv` (already in use), and a working Python 3.14 toolchain.
-3. **Working directory:** All paths in this plan are relative to `D:\Workspace\rehketo\rehketo-api\` unless otherwise noted. Root-level files (docker-compose, repo `.env.example`) live at `D:\Workspace\rehketo\`.
+3. **Working directory:** All paths in this plan are relative to `D:\Workspace\rehketo\rehketo-api\`. Docker Compose and shared infra (bifrost config, postgres init) live under `rehketo-api/deploy/` so they are tracked in rehketo-api's git repo. rehketo-ui, when it arrives in Plan 3, will have its own dev-server workflow and will be composed in alongside these files as needed.
 
 ## File structure (created or modified by this plan)
 
 ```
-D:\Workspace\rehketo\
-├── docker-compose.yaml                              # NEW
-├── .env.example                                     # NEW (compose-level)
-├── bifrost/
-│   └── config.yaml                                  # NEW (placeholder — idle in Plan 1)
-└── rehketo-api/
+rehketo-api/
+    ├── deploy/
+    │   ├── docker-compose.yaml                      # NEW
+    │   ├── .env.example                             # NEW (compose-level)
+    │   ├── bifrost/
+    │   │   └── config.yaml                          # NEW (placeholder — idle in Plan 1)
+    │   └── postgres/
+    │       └── init/
+    │           └── 00-create-databases.sh           # NEW
     ├── pyproject.toml                               # MODIFY (add deps)
     ├── alembic.ini                                  # NEW
     ├── alembic/
@@ -125,14 +128,15 @@ DEVONLY_LOGIN_ENABLED=true          # tests + dev only
 
 ## Task 1: Docker Compose scaffolding (postgres + bifrost placeholder)
 
-**Files:**
-- Create: `D:/Workspace/rehketo/docker-compose.yaml`
-- Create: `D:/Workspace/rehketo/.env.example`
-- Create: `D:/Workspace/rehketo/bifrost/config.yaml`
+**Files (all under `rehketo-api/deploy/`):**
+- Create: `rehketo-api/deploy/docker-compose.yaml`
+- Create: `rehketo-api/deploy/.env.example`
+- Create: `rehketo-api/deploy/bifrost/config.yaml`
+- Create: `rehketo-api/deploy/postgres/init/00-create-databases.sh`
 
 - [ ] **Step 1: Write the compose file**
 
-Create `D:/Workspace/rehketo/docker-compose.yaml`:
+Create `rehketo-api/deploy/docker-compose.yaml`:
 
 ```yaml
 name: rehketo
@@ -175,7 +179,7 @@ volumes:
 
 `postgres` only creates one DB by default. Add a one-shot init script to create both.
 
-Create `D:/Workspace/rehketo/postgres/init/00-create-databases.sh` (executable on Linux; on Windows, Docker for Desktop runs it with bash):
+Create `rehketo-api/deploy/postgres/init/00-create-databases.sh` (executable on Linux; on Windows, Docker for Desktop runs it with bash):
 
 ```bash
 #!/bin/bash
@@ -190,7 +194,7 @@ EOSQL
 
 - [ ] **Step 3: Write the env template**
 
-Create `D:/Workspace/rehketo/.env.example`:
+Create `rehketo-api/deploy/.env.example`:
 
 ```
 # Used by docker-compose. Copy to .env and fill secrets.
@@ -202,7 +206,7 @@ POSTGRES_PASSWORD=rehketo
 
 Bifrost is not exercised in Plan 1. Create a minimal valid config so the container can start and be validated to connect to postgres, nothing more.
 
-Create `D:/Workspace/rehketo/bifrost/config.yaml`:
+Create `rehketo-api/deploy/bifrost/config.yaml`:
 
 ```yaml
 # Placeholder for Plan 1. Provider routing is populated in Plan 2.
@@ -213,7 +217,7 @@ providers: []
 
 - [ ] **Step 5: Verify compose validates and postgres boots**
 
-Run (from `D:/Workspace/rehketo`):
+Run (from `rehketo-api/deploy/`):
 ```
 docker compose config
 docker compose up -d postgres
@@ -224,8 +228,9 @@ Expected: each `psql` call returns `?column?` with `1`.
 
 - [ ] **Step 6: Commit**
 
+From `rehketo-api/`:
 ```
-git add docker-compose.yaml postgres/ bifrost/ .env.example
+git add deploy/
 git commit -m "chore: add docker-compose scaffolding (postgres + bifrost placeholder)"
 ```
 
