@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.14"
 
 [options]
-exclude-newer = "2026-04-18T17:35:24.6649192Z"
+exclude-newer = "2026-04-18T17:38:34.4452595Z"
 exclude-newer-span = "P1D"
 
 [[package]]
@@ -749,7 +749,6 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "respx" },
     { name = "ruff" },
-    { name = "sqlalchemy-stubs" },
     { name = "testcontainers" },
 ]
 
@@ -776,7 +775,6 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "respx", specifier = ">=0.22.0" },
     { name = "ruff", specifier = ">=0.15.0" },
-    { name = "sqlalchemy-stubs", specifier = ">=0.4" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.8.0" },
 ]
 
@@ -861,19 +859,6 @@ wheels = [
 [package.optional-dependencies]
 asyncio = [
     { name = "greenlet" },
-]
-
-[[package]]
-name = "sqlalchemy-stubs"
-version = "0.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "mypy" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/81/60/db082788267740b17eac2c00666bbea1c8c5a94b569e8b1ea76b0cf42d57/sqlalchemy-stubs-0.4.tar.gz", hash = "sha256:c665d6dd4482ef642f01027fa06c3d5e91befabb219dc71fc2a09e7d7695f7ae", size = 70682, upload-time = "2021-01-12T14:02:04.438Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/62/ae/cb215ab25b76228bc90c90444b87e323ffba58c212321a53d5bc92903098/sqlalchemy_stubs-0.4-py3-none-any.whl", hash = "sha256:5eec7aa110adf9b957b631799a72fef396b23ff99fe296df726645d01e312aa5", size = 116067, upload-time = "2021-01-12T14:02:02.723Z" },
 ]
 
 [[package]]
