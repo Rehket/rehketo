@@ -4,9 +4,8 @@ services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_USER: rehketo
-      POSTGRES_PASSWORD: rehketo
-      POSTGRES_MULTIPLE_DATABASES: rehketo,bifrost
+      POSTGRES_USER: ${POSTGRES_USER:-rehketo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rehketo}
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -21,7 +20,7 @@ services:
     image: maximhq/bifrost:latest
     ports: ["8088:8088"]
     environment:
-      BIFROST_POSTGRES_DSN: postgres://rehketo:rehketo@postgres:5432/bifrost
+      BIFROST_POSTGRES_DSN: postgres://${POSTGRES_USER:-rehketo}:${POSTGRES_PASSWORD:-rehketo}@postgres:5432/bifrost
     volumes:
       - ./bifrost/config.yaml:/etc/bifrost/config.yaml:ro
       - bifrost_data:/var/lib/bifrost
