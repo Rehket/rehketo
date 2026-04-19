@@ -177,6 +177,85 @@ Not in Plan 1. When it lands: event shape is our stable schema (not a passthroug
 - `rehketo.core.logging` MUST NOT depend on anything in the `rehketo` package (it's foundational).
 - Cross-domain direct imports (e.g., `rehketo.permissions.check` importing from `rehketo.auth.sessions`) are smells — route through dependencies/interfaces.
 
+## FastAPI + Pydantic typing — common gotchas
+
+Mypy with `disallow_untyped_defs = true` and the pydantic plugin is strict. Get these right the first time — they are where the lint cycle burns the most iterations.
+
+**1. Prefer `Annotated[T, Depends(...)]` over `T = Depends(...)`.**
+The old `param: T = Depends(provider)` form makes mypy warn about default-value type mismatch. Use:
+```python
+from typing import Annotated
+from fastapi import Depends
+
+async def handler(
+    db: Annotated[AsyncSession, Depends(get_session)],
+    perms: Annotated[ResolvedPermissions, Depends(resolve_permissions)],
+) -> ConversationOut: ...
+```
+Same pattern for `Query`, `Path`, `Body`, `Header`, `Cookie`, `Form`, `File`:
+```python
+conversation_id: Annotated[UUID, Path(...)],
+include_archived: Annotated[bool, Query(default=False)] = False,
+rehketo_session: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
+```
+
+**2. Pydantic v2 API — use the v2 names.**
+- `model_config = ConfigDict(...)` — NOT an inner `class Config:` (that's v1).
+- `model.model_dump()` and `model.model_dump_json()` — NOT `.dict()` / `.json()`.
+- `@field_validator("name")` / `@model_validator(mode="after")` — NOT `@validator` / `@root_validator`.
+- `model_fields`, `model_rebuild()`, `model_validate()` — v2 names.
+- Deprecated constraint shortcuts (`conlist`, `constr`, `conint`, ...) — use `Annotated[list[X], Field(max_length=...)]` etc. instead.
+
+**3. `SecretStr` — `.get_secret_value()` at the boundary.**
+`Settings` secrets typed as `SecretStr` cannot be passed where `str` is expected. Call `.get_secret_value()` at the exact use site (so it doesn't leak into logs via f-strings earlier up the call chain):
+```python
+client_secret = settings.entra_client_secret.get_secret_value()
+```
+
+**4. PEP 604 unions everywhere.**
+`str | None`, not `Optional[str]`. `int | float`, not `Union[int, float]`. Ruff `UP` enforces.
+
+**5. Route return types must match `response_model`.**
+If you declare `response_model=ConversationOut`, annotate the handler as `-> ConversationOut`. Don't annotate as `dict` and rely on FastAPI coercion — mypy can't see through that.
+
+```python
+@router.post("", status_code=201, response_model=ConversationOut)
+async def create_conversation(...) -> ConversationOut:
+    ...
+    return ConversationOut(id=conv.id)   # return the model, not a dict
+```
+
+For 204 / empty responses, return `Response(status_code=204)` and annotate the handler as `-> Response`. Do not set `response_model` on 204 endpoints.
+
+**6. Dependency functions are typed too.**
+```python
+async def get_session() -> AsyncIterator[AsyncSession]: ...
+async def resolve_session(...) -> AuthContext: ...
+async def resolve_permissions(...) -> ResolvedPermissions: ...
+```
+Typed dependency return values flow into handlers through `Annotated[T, Depends(...)]` and mypy knows the exact type.
+
+**7. Async generators vs async iterators.**
+Use `AsyncIterator[T]` for dependency yields (simple yield-then-cleanup), `AsyncGenerator[T, None]` when you need `send()`/`throw()`. For SSE endpoints (Plan 2), `AsyncIterator[str]` or `AsyncIterator[bytes]`.
+
+**8. Response subclass return types.**
+If you return a `RedirectResponse` or `JSONResponse` from a handler, annotate as `-> Response` (the base) and do NOT set a `response_model`. Mixing a custom `Response` return with a `response_model` is ambiguous; pick one.
+
+**9. Pydantic `Field` positional-vs-keyword.**
+In v2, the first positional arg to `Field` is `default`. `Field("", description="...")` sets default to `""`. To require the field, omit the default or use `Field(..., description="...")` (the literal `...` ellipsis is the v2-accepted required sentinel).
+
+**10. Don't use `List[X]` / `Dict[K, V]` / `Optional[X]`.**
+PEP 585/604: `list[X]`, `dict[K, V]`, `X | None`. Ruff `UP006` / `UP007` will flag.
+
+**11. `BaseSettings` env var parsing.**
+Booleans: `pydantic-settings` reads `"1"`, `"true"`, `"yes"`, `"on"` (case-insensitive) as `True`. Lists: comma-separated string in env (`CORS_ORIGINS=http://a,http://b`) → `list[str]`. JSON-structured values need explicit parsing.
+
+**12. `model_validate` vs construction.**
+To instantiate a pydantic model from a dict (e.g., after decoding JSON), use `Model.model_validate(d)`. Direct `Model(**d)` also works but skips field aliasing and sometimes coercion paths.
+
+**13. Forward references with SQLAlchemy.**
+Don't import pydantic models into `rehketo.db.models` for response-shaping. Define pydantic response models next to the routes that use them (`rehketo.api.conversations.ConversationOut`), so database and API layers stay separable.
+
 ## "Don't do these"
 
 - Do not write a second permission check path. There is one gate.
