@@ -27,6 +27,10 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Rehketo API", version="0.1.0", lifespan=_lifespan)
     install_error_handlers(app)
 
+    from rehketo.api import auth_routes
+
+    app.include_router(auth_routes.router)
+
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
