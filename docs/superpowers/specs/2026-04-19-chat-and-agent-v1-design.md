@@ -95,7 +95,7 @@ Two Entra app registrations:
 
 ### Session model
 
-- `httpOnly`, `Secure`, `SameSite=Lax` cookie with an opaque session id.
+- `httpOnly`, `Secure`, `SameSite=Lax` cookie with an opaque session id. `Lax` (not `Strict`) is chosen because the OAuth callback redirect is a cross-site top-level navigation, and because deep links to rehketo from email / messaging clients should land the user in their session. The residual CSRF attack surface (top-level navigation CSRF) is covered by the double-submit CSRF tokens required on state-changing endpoints.
 - Session rows live in postgres; the refresh token column is encrypted at rest (envelope encryption with an app key, or `pgcrypto`).
 - Access tokens are short-lived and held only in in-memory cache keyed by session, refreshed on demand using the stored refresh token.
 - Cookie rotates on elevation events: login, connection-consent grant, explicit rotation.
