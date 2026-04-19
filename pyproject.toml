@@ -27,6 +27,12 @@ dev = [
     "respx>=0.22.0",
     "ruff>=0.15.0",
     "mypy>=1.19.1",
+    "memray>=1.19.2; sys_platform != 'win32'",
+    "import-linter>=2.11",
+    "pre-commit>=4.0.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+    "bandit>=1.9.4",
 ]
 
 [tool.pytest.ini_options]
@@ -35,3 +41,54 @@ testpaths = ["tests"]
 
 [tool.uv]
 exclude-newer = "1 days"
+
+
+[tool.ruff.lint]
+select = [
+    "F",     # pyflakes — undefined names, unused imports
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "I",     # isort — import ordering
+    "B",     # flake8-bugbear — common bugs and design problems
+    "UP",    # pyupgrade — modernize syntax
+    "RUF",   # ruff-specific rules
+    "T20",   # flake8-print — catch leftover print() statements
+    "SIM",   # flake8-simplify — simplifiable code
+    "TC",    # flake8-type-checking — move imports behind TYPE_CHECKING
+    "C90",   # mccabe — cyclomatic complexity
+    "PLR",   # pylint refactoring — too-many-args, too-many-branches, etc.
+    "S",     # flake8-bandit — security checks
+]
+ignore = [
+    "B008",   # Depends() in function defaults — standard FastAPI pattern
+    "RUF012", # Mutable class attrs — false positive for SQLAlchemy __table_args__
+    "SIM112", # Capitalized env vars — we don't control external env var names
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.pylint]
+max-args = 8
+max-branches = 10
+max-returns = 6
+max-statements = 50
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["T20", "S101", "PLR2004", "S106"]
+"conftest.py" = ["T20", "S101"]
+"scripts/**" = ["T20", "S101", "PLR2004", "C901", "PLR0912", "PLR0913", "PLR0915"]
+"fastapp/prompts/**" = ["E501"]
+
+# --- mypy (static type checker) ---
+[tool.mypy]
+python_version = "3.14"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
