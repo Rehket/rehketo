@@ -34,7 +34,9 @@ _RE_KV_SECRET = re.compile(
 )
 _RE_URL_PARAM = re.compile(r"(?i)\b(tempauth|token|sig|signature)\s*=\s*[^\s&]+")
 _RE_OPENAI_SK = re.compile(r"sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}")
-_RE_PEM_INLINE = re.compile(r"-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----", re.DOTALL)
+_RE_PEM_INLINE = re.compile(
+    r"-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----", re.DOTALL
+)
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +61,8 @@ def sanitize_for_log(value: object, *, max_len: int = 256) -> str:
     """
     Return a single-line, bounded string safe to pass as a logging argument.
 
-    Replaces control characters (including CR/LF/TAB) with spaces and truncates to *max_len*.
+    Replaces control characters (including CR/LF/TAB) with spaces and truncates to
+    *max_len*.
     """
     if value is None:
         return ""
@@ -93,7 +96,8 @@ def exception_message_for_log(exc: BaseException, *, max_len: int = 1200) -> str
     """
     Human-readable exception text for operators: message is redacted and single-lined.
 
-    Prefers driver ``msg`` when set (e.g. Snowflake ``DatabaseError``), else ``str(exc)``.
+    Prefers driver ``msg`` when set (e.g. Snowflake ``DatabaseError``), else
+    ``str(exc)``.
     """
     raw = ""
     msg = getattr(exc, "msg", None)
@@ -107,7 +111,8 @@ def exception_message_for_log(exc: BaseException, *, max_len: int = 1200) -> str
 
 
 def format_exc_for_log(exc: BaseException, *, max_len: int = 1200) -> str:
-    """Exception class (and errno if any) plus sanitized message, or type only if no message."""
+    """Exception class (and errno if any) plus sanitized message, or type only if no
+    message."""
     t = exc_type_for_log(exc)
     body = exception_message_for_log(exc, max_len=max_len)
     if body == t:
@@ -192,9 +197,14 @@ class LogSanitizingFilter(logging.Filter):
             record.msg = self._clean(record.msg)
         if record.args:
             if isinstance(record.args, dict):
-                record.args = {k: self._clean(v) if isinstance(v, str) else v for k, v in record.args.items()}
+                record.args = {
+                    k: self._clean(v) if isinstance(v, str) else v
+                    for k, v in record.args.items()
+                }
             elif isinstance(record.args, tuple):
-                record.args = tuple(self._clean(v) if isinstance(v, str) else v for v in record.args)
+                record.args = tuple(
+                    self._clean(v) if isinstance(v, str) else v for v in record.args
+                )
         return True
 
 
