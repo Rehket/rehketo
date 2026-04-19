@@ -1,0 +1,34 @@
+name: rehketo
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: rehketo
+      POSTGRES_PASSWORD: rehketo
+      POSTGRES_MULTIPLE_DATABASES: rehketo,bifrost
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "rehketo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  bifrost:
+    image: maximhq/bifrost:latest
+    ports: ["8088:8088"]
+    environment:
+      BIFROST_POSTGRES_DSN: postgres://rehketo:rehketo@postgres:5432/bifrost
+    volumes:
+      - ./bifrost/config.yaml:/etc/bifrost/config.yaml:ro
+      - bifrost_data:/var/lib/bifrost
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  bifrost_data:
