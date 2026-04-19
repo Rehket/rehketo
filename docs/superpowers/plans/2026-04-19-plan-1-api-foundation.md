@@ -185,12 +185,12 @@ Create `rehketo-api/deploy/postgres/init/00-create-databases.sh` (executable on 
 #!/bin/bash
 set -e
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
-  CREATE DATABASE rehketo;
-  CREATE DATABASE bifrost;
+  SELECT 'CREATE DATABASE rehketo' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'rehketo')\gexec
+  SELECT 'CREATE DATABASE bifrost' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'bifrost')\gexec
 EOSQL
 ```
 
-(Note: `POSTGRES_USER=rehketo` may already own the default db; these `CREATE DATABASE` calls are idempotent on first boot only. If you re-use the volume, drop it first.)
+Note: the postgres image auto-creates a database named after `POSTGRES_USER` (so `rehketo` exists before init scripts run). The idempotent `\gexec` guard avoids failing on the pre-existing DB while still ensuring both databases exist after init.
 
 - [ ] **Step 3: Write the env template**
 
