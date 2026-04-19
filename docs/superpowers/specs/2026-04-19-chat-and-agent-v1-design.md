@@ -96,6 +96,7 @@ Two Entra app registrations:
 ### Session model
 
 - `httpOnly`, `Secure`, `SameSite=Lax` cookie with an opaque session id. `Lax` (not `Strict`) is chosen because the OAuth callback redirect is a cross-site top-level navigation, and because deep links to rehketo from email / messaging clients should land the user in their session. The residual CSRF attack surface (top-level navigation CSRF) is covered by the double-submit CSRF tokens required on state-changing endpoints.
+- **Elevation for dangerous operations (committed, not v1).** When rehketo gains actions with significant blast radius — admin operations, destructive account actions, permission grants, connection revocation that affects others — the auth model adds a second cookie, `session_elevated`, set to `SameSite=Strict` and scoped to endpoints that require it. Elevation is granted via a short re-authentication step (OIDC prompt or MFA challenge) and has its own, shorter TTL independent of the main session. Endpoints that require elevation declare it via a FastAPI dependency, analogous to `resolve_permissions`. This is orthogonal to permissions: `check_permission` asks "is this user allowed?"; elevation asks "has this user recently proven their identity strongly enough to do this *right now*?" Both gates must pass. Elevation is **not** part of v1 (no dangerous actions exist yet) but ships as part of the same increment that introduces the first such action.
 - Session rows live in postgres; the refresh token column is encrypted at rest (envelope encryption with an app key, or `pgcrypto`).
 - Access tokens are short-lived and held only in in-memory cache keyed by session, refreshed on demand using the stored refresh token.
 - Cookie rotates on elevation events: login, connection-consent grant, explicit rotation.
@@ -476,6 +477,7 @@ All API errors return a stable JSON envelope: `{"error": {"code": "...", "messag
 3. **First real tool.** Validate the tool-calling path end-to-end through Bifrost + Responses + deepagents with a well-scoped tool (web search is the likeliest first pick).
 4. **Connections + first downstream-API-using capability.** Wire the consent flow and refresh mechanism end-to-end with one concrete use case (e.g., MS Graph mail read).
 5. **OpenFGA migration.** Introduce the service, upload the model, backfill tuples, swap `check_permission`'s body.
+6. **Elevation (bundled with the first dangerous action).** Whenever the first action with significant blast radius lands (admin ops, destructive user actions, permission grants), introduce the `session_elevated` cookie, the re-authentication endpoint, and the `requires_elevation` dependency alongside it. Not time-based; gated on the first action that warrants it.
 
 ## 14. Open decisions (tracked for the implementation plan)
 
