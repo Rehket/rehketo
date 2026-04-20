@@ -19,7 +19,7 @@ See `docs/superpowers/specs/` for the design spec and `docs/superpowers/plans/` 
 - Docker Desktop (or equivalent — the stack runs on vanilla `docker compose`).
 - [`uv`](https://docs.astral.sh/uv/) with Python 3.14 available.
 - An Entra app registration with redirect URI `http://127.0.0.1:8000/auth/callback`. For the ship-check below you can skip real Entra login and use `/auth/devonly/login` instead — you still need the client id / tenant id / client secret in env so the app starts cleanly.
-- An **Anthropic API key** for live chat turns (the test suite does not need one — tests mock Bifrost).
+- An **Anthropic API key** for live chat turns, supplied to Bifrost through its admin UI (the test suite does not need one — tests mock Bifrost).
 
 ---
 
@@ -53,20 +53,27 @@ Fill in `deploy/.env`:
 
 - `ANTHROPIC_API_KEY` — your Anthropic key. Bifrost reads it via `${ANTHROPIC_API_KEY}` in `deploy/bifrost/config.yaml`.
 
-### 2. Review `deploy/bifrost/config.yaml`
-
-The committed config registers one Anthropic provider and a single `claude-sonnet-4-6` model alias, and enables the Responses-API compatibility layer. Bifrost's schema evolves between releases — if the container refuses the config on startup, consult <https://github.com/maximhq/bifrost> for the current shape and adjust.
-
-### 3. Bring up postgres + Bifrost
+### 2. Bring up postgres + Bifrost
 
 From `rehketo-api/deploy/`:
 
 ```bash
 docker compose up -d postgres bifrost
-docker compose logs -f bifrost   # verify it loaded the Anthropic provider cleanly
+docker compose logs -f bifrost
 ```
 
 The `postgres/init/00-create-databases.sh` script creates both `rehketo` (app) and `bifrost` (gateway state) databases on first boot. If you previously ran the stack with a different config, `docker compose down -v` first to wipe `pgdata`.
+
+### 3. Configure Bifrost through its UI
+
+Bifrost manages its own config at `/app/data/config.json` (persisted via the `bifrost_data` volume). Providers and model aliases are **not** baked into a mounted config file — configure them once through the Bifrost admin UI:
+
+1. Open <http://localhost:8088> in a browser.
+2. Add an **Anthropic** provider and paste your Anthropic API key.
+3. Register a model alias named exactly **`claude-sonnet-4-6`** routed to Anthropic (that's the name `rehketo-api` sends; the `AGENT_MODEL` env var is the single seam if you ever want to rename it).
+4. Ensure the OpenAI-compatible **Responses API** surface is enabled so LangChain's `ChatOpenAI(use_responses_api=True)` can speak to Bifrost unchanged.
+
+This survives container restarts as long as the `bifrost_data` volume is kept.
 
 ### 4. Install deps + migrate
 
@@ -199,13 +206,12 @@ tests/
   integration/             # real postgres, httpx ASGI client, respx for Bifrost
 deploy/
   docker-compose.yaml      # postgres + bifrost
-  bifrost/config.yaml      # provider routing
   postgres/init/           # multi-db init script
 ```
 
 ## Troubleshooting
 
-**Bifrost fails to start** with a config-parse error — the `deploy/bifrost/config.yaml` schema may have drifted with a newer Bifrost release. Check `docker compose logs bifrost`, verify against <https://github.com/maximhq/bifrost>, and adjust keys.
+**Bifrost fails to start** — check `docker compose logs bifrost`. If it complains about postgres DSN, confirm the `bifrost` database exists (`docker compose exec postgres psql -U rehketo -l`). If provider config appears missing, re-open <http://localhost:8088> and add Anthropic + the `claude-sonnet-4-6` model alias; Bifrost persists these to the `bifrost_data` volume.
 
 **`POST /conversations/{id}/messages` returns 202 but no SSE events flow** — usually means Bifrost can't reach Anthropic. Check `docker compose logs bifrost` for 401s or network errors. Confirm `ANTHROPIC_API_KEY` is set in `deploy/.env` and that the Bifrost container env actually has it (`docker compose exec bifrost env | grep ANTHROPIC`).
 
