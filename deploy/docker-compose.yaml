@@ -21,6 +21,7 @@ services:
     ports: ["8088:8088"]
     environment:
       BIFROST_POSTGRES_DSN: postgres://${POSTGRES_USER:-rehketo}:${POSTGRES_PASSWORD:-rehketo}@postgres:5432/bifrost
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - ./bifrost/config.yaml:/etc/bifrost/config.yaml:ro
       - bifrost_data:/var/lib/bifrost
