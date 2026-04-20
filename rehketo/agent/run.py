@@ -142,13 +142,21 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
         )
 
     except asyncio.CancelledError:
-        async with sessionmaker()() as db:
-            await db.execute(
-                update(Run).where(Run.id == run_id).values(
-                    status="cancelled",
-                    finished_at=datetime.now(UTC),
+        # Shield the finalizer so a second cancel during cleanup doesn't strand
+        # the run in 'running' status. The re-raise at the end still propagates
+        # the cancellation so asyncio marks the task as cancelled.
+        async def _finalize_cancel() -> None:
+            async with sessionmaker()() as db:
+                await db.execute(
+                    update(Run).where(Run.id == run_id).values(
+                        status="cancelled",
+                        finished_at=datetime.now(UTC),
+                    )
                 )
+                await db.commit()
+            await bus.publish(
+                str(run_id), {"type": "run.status", "status": "cancelled"}
             )
-            await db.commit()
-        await bus.publish(str(run_id), {"type": "run.status", "status": "cancelled"})
+
+        await asyncio.shield(_finalize_cancel())
         raise
