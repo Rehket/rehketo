@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 from rehketo.api.errors import install_error_handlers
+from rehketo.auth.csrf_middleware import CSRFMiddleware
 from rehketo.config import get_settings
 from rehketo.core.logging import get_logger
 
@@ -26,6 +27,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="Rehketo API", version="0.1.0", lifespan=_lifespan)
     install_error_handlers(app)
+    app.add_middleware(CSRFMiddleware)
 
     from rehketo.api import auth_routes
 
