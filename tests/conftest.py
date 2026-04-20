@@ -47,6 +47,9 @@ def settings_env(
     monkeypatch.setenv("ENTRA_REDIRECT_URI", "http://localhost:8000/auth/callback")
     monkeypatch.setenv("UI_POST_LOGIN_URL", "http://localhost:5173/")
     monkeypatch.setenv("DEVONLY_LOGIN_ENABLED", "true")
+    monkeypatch.setenv("BIFROST_BASE_URL", "http://bifrost-mock/v1")
+    monkeypatch.setenv("BIFROST_API_KEY", "test-key")
+    monkeypatch.setenv("AGENT_MODEL", "claude-sonnet-4-6")
     from rehketo.config import get_settings
 
     get_settings.cache_clear()

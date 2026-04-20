@@ -25,6 +25,10 @@ class Settings(BaseSettings):
 
     devonly_login_enabled: bool = False
 
+    bifrost_base_url: str = "http://localhost:8088/v1"
+    bifrost_api_key: SecretStr = SecretStr("dev-noop")
+    agent_model: str = "claude-sonnet-4-6"
+
 
 @lru_cache
 def get_settings() -> Settings:
