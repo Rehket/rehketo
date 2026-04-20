@@ -14,3 +14,4 @@ wheels/
 
 # Local deploy overrides
 deploy/.env
+deploy/bifrost_data/

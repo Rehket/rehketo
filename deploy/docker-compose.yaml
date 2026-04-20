@@ -18,18 +18,26 @@ services:
 
   bifrost:
     image: maximhq/bifrost:latest
-    ports: ["8088:8088"]
+    ports: ["8088:8080"]
     environment:
-      BIFROST_POSTGRES_DSN: postgres://${POSTGRES_USER:-rehketo}:${POSTGRES_PASSWORD:-rehketo}@postgres:5432/bifrost
+      # config_store + logs_store expand from these names inside ./bifrost_data/config.json
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_USER: ${POSTGRES_USER:-rehketo}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-rehketo}
+      PG_DB: bifrost
+      PG_SSL_MODE: disable
+      # Key used to encrypt stored provider API keys. Must stay stable across
+      # container restarts — rotating it strands previously saved keys.
+      BIFROST_ENCRYPTION_KEY: ${BIFROST_ENCRYPTION_KEY}
     volumes:
       # Bifrost writes config + state to /app/data (config.json, keys, logs).
       # Providers and model aliases are managed through the Bifrost UI at
       # http://localhost:8088 — do NOT bake them into a mounted file.
-      - bifrost_data:/app/data
+      - ./bifrost_data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   pgdata:
-  bifrost_data:

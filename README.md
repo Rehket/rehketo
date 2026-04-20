@@ -51,7 +51,10 @@ Fill in `rehketo-api/.env`:
 
 Fill in `deploy/.env`:
 
-- `ANTHROPIC_API_KEY` — your Anthropic key. Bifrost reads it via `${ANTHROPIC_API_KEY}` in `deploy/bifrost/config.yaml`.
+- `BIFROST_ENCRYPTION_KEY` — any long random string. Bifrost uses this to encrypt provider API keys that you save through its UI. **Generate once, never rotate** — changing it strands previously saved keys. Quick generator:
+  ```bash
+  python -c "import secrets; print(secrets.token_urlsafe(32))"
+  ```
 
 ### 2. Bring up postgres + Bifrost
 
