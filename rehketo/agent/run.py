@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 
 from rehketo.agent.events import transform_chunk
 from rehketo.agent.graph import build_agent
+from rehketo.agent.title import generate_title_if_needed
 from rehketo.core.logging import get_logger
 from rehketo.db import sessionmaker
 from rehketo.db.models import Message, Run
@@ -116,6 +117,8 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
             },
         )
         await bus.publish(str(run_id), {"type": "run.status", "status": "succeeded"})
+        # Best-effort title generation. Fire and forget.
+        asyncio.create_task(generate_title_if_needed(conversation_id))  # noqa: RUF006
 
     except Exception as exc:
         # Broad catch is intentional: this is a top-level task handler that
