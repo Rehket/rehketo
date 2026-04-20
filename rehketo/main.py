@@ -13,6 +13,8 @@ from rehketo.api.errors import install_error_handlers
 from rehketo.auth.csrf_middleware import CSRFMiddleware
 from rehketo.config import get_settings
 from rehketo.core.logging import get_logger
+from rehketo.runs.event_bus import InProcessEventBus
+from rehketo.runs.registry import get_registry
 
 logger = get_logger(__name__)
 
@@ -31,13 +33,18 @@ def create_app() -> FastAPI:
     install_error_handlers(app)
     app.add_middleware(CSRFMiddleware)
 
+    app.state.event_bus = InProcessEventBus()
+    app.state.task_registry = get_registry()
+
     from rehketo.api import auth_routes
     from rehketo.api import conversations as conversations_api
     from rehketo.api import me as me_api
+    from rehketo.api import messages as messages_api
 
     app.include_router(auth_routes.router)
     app.include_router(conversations_api.router)
     app.include_router(me_api.router)
+    app.include_router(messages_api.router)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
