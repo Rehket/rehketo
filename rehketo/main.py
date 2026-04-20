@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import asyncio
+import sys
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
+
+# psycopg3 async cannot use Windows's default ProactorEventLoop. Force the
+# SelectorEventLoop policy at import time so uvicorn picks it up when it
+# creates the app's loop.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore[attr-defined]
+    )
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
