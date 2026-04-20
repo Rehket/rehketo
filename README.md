@@ -96,10 +96,14 @@ The devonly login endpoint creates the user on first call and assigns the roles 
 ### 6. Run the API
 
 ```bash
-uv run uvicorn rehketo.main:app --reload --host 127.0.0.1 --port 8000
+uv run python -m rehketo.cli.serve
 ```
 
-Leave this running in its own terminal.
+Leave this running in its own terminal. The wrapper sets the Windows
+`SelectorEventLoopPolicy` before uvicorn creates its event loop; psycopg3
+async refuses to run on the default `ProactorEventLoop`. On non-Windows
+hosts, `uv run uvicorn rehketo.main:app --reload --host 127.0.0.1 --port 8000`
+works equivalently.
 
 ### 7. Smoke test a full chat turn
 
