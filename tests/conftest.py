@@ -38,14 +38,14 @@ def settings_env(
     """Minimal env for building an app that does not touch the DB."""
     key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
     monkeypatch.setenv("APP_ENV", "test")
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/d")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@127.0.0.1:5432/d")
     monkeypatch.setenv("SESSION_ENCRYPTION_KEY", key)
     monkeypatch.setenv("CSRF_SIGNING_KEY", "x" * 64)
     monkeypatch.setenv("ENTRA_TENANT_ID", "tid")
     monkeypatch.setenv("ENTRA_CLIENT_ID", "cid")
     monkeypatch.setenv("ENTRA_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("ENTRA_REDIRECT_URI", "http://localhost:8000/auth/callback")
-    monkeypatch.setenv("UI_POST_LOGIN_URL", "http://localhost:5173/")
+    monkeypatch.setenv("ENTRA_REDIRECT_URI", "http://127.0.0.1:8000/auth/callback")
+    monkeypatch.setenv("UI_POST_LOGIN_URL", "http://127.0.0.1:5173/")
     monkeypatch.setenv("DEVONLY_LOGIN_ENABLED", "true")
     monkeypatch.setenv("BIFROST_BASE_URL", "http://bifrost-mock/v1")
     monkeypatch.setenv("BIFROST_API_KEY", "test-key")
@@ -72,7 +72,9 @@ def _sa_url(pg: PostgresContainer) -> str:
         raw = raw.replace("+psycopg2", "+psycopg")
     if raw.startswith("postgresql://"):
         raw = raw.replace("postgresql://", "postgresql+psycopg://", 1)
-    return raw
+    # Windows `localhost` resolution can stall on IPv6 fallback — force IPv4
+    # loopback so every connection skips name lookup.
+    return raw.replace("@localhost:", "@127.0.0.1:")
 
 
 @pytest.fixture
