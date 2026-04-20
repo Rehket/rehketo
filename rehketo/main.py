@@ -8,6 +8,7 @@ from fastapi import FastAPI
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+from rehketo.agent.sweep import sweep_abandoned_runs
 from rehketo.api.errors import install_error_handlers
 from rehketo.auth.csrf_middleware import CSRFMiddleware
 from rehketo.config import get_settings
@@ -21,6 +22,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.settings = settings
     logger.info("rehketo-api starting app_env=%s", settings.app_env)
+    await sweep_abandoned_runs()
     yield
 
 
