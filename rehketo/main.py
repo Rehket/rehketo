@@ -39,7 +39,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Rehketo API", version="0.1.0", lifespan=_lifespan)
+    app = FastAPI(
+        title="Rehketo API",
+        version="0.1.0",
+        lifespan=_lifespan,
+        # Stock /docs assumes Bearer auth; we serve a Pattern B-aware replacement
+        # from rehketo.api.docs that threads cookies + the CSRF header for us.
+        docs_url=None,
+        redoc_url=None,
+    )
     install_error_handlers(app)
     app.add_middleware(CSRFMiddleware)
 
@@ -48,12 +56,14 @@ def create_app() -> FastAPI:
 
     from rehketo.api import auth_routes
     from rehketo.api import conversations as conversations_api
+    from rehketo.api import docs as docs_api
     from rehketo.api import me as me_api
     from rehketo.api import messages as messages_api
     from rehketo.api import runs as runs_api
 
     app.include_router(auth_routes.router)
     app.include_router(conversations_api.router)
+    app.include_router(docs_api.router)
     app.include_router(me_api.router)
     app.include_router(messages_api.router)
     app.include_router(runs_api.router)
