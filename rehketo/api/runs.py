@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Annotated
+from uuid import UUID  # noqa: TC003  # used at runtime in Pydantic model + route path
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002  # FastAPI needs runtime type for Depends()
+)
+from sse_starlette.sse import EventSourceResponse
+
+from rehketo.db import get_session
+from rehketo.db.models import Run
+from rehketo.permissions.dependencies import ResolvedPermissions, resolve_permissions
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+router = APIRouter(prefix="/runs", tags=["runs"])
+
+
+class RunOut(BaseModel):
+    id: UUID
+    conversation_id: UUID
+    status: str
+    model: str
+
+
+@router.get("/{run_id}", response_model=RunOut)
+async def get_run(
+    run_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    perms: Annotated[ResolvedPermissions, Depends(resolve_permissions)],
+) -> RunOut:
+    perms.require(
+        "chat.view_conversation",
+        resource_type="run",
+        resource_id=run_id,
+    )
+    run = (
+        await db.execute(
+            select(Run).where(Run.id == run_id, Run.user_id == perms.user_id)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return RunOut(
+        id=run.id,
+        conversation_id=run.conversation_id,
+        status=run.status,
+        model=run.model,
+    )
+
+
+@router.get("/{run_id}/events")
+async def run_events(
+    run_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    perms: Annotated[ResolvedPermissions, Depends(resolve_permissions)],
+    from_sequence: int | None = None,
+) -> EventSourceResponse:
+    perms.require(
+        "chat.view_conversation",
+        resource_type="run",
+        resource_id=run_id,
+    )
+    run = (
+        await db.execute(
+            select(Run).where(Run.id == run_id, Run.user_id == perms.user_id)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+
+    bus = request.app.state.event_bus
+
+    async def _stream() -> AsyncIterator[dict[str, object]]:
+        async for event in bus.subscribe(str(run_id), from_sequence=from_sequence):
+            yield {
+                "event": event["type"],
+                "data": event,
+            }
+            # Terminal states close the stream
+            if event.get("type") == "run.status" and event.get("status") in (
+                "succeeded",
+                "failed",
+                "cancelled",
+            ):
+                return
+
+    return EventSourceResponse(_stream())
+
+
+@router.post("/{run_id}/cancel", status_code=204)
+async def cancel_run(
+    run_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    perms: Annotated[ResolvedPermissions, Depends(resolve_permissions)],
+) -> None:
+    perms.require(
+        "chat.cancel_run",
+        resource_type="run",
+        resource_id=run_id,
+    )
+    run = (
+        await db.execute(
+            select(Run).where(Run.id == run_id, Run.user_id == perms.user_id)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    registry = request.app.state.task_registry
+    registry.cancel(run_id)

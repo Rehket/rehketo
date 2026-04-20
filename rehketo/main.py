@@ -40,11 +40,13 @@ def create_app() -> FastAPI:
     from rehketo.api import conversations as conversations_api
     from rehketo.api import me as me_api
     from rehketo.api import messages as messages_api
+    from rehketo.api import runs as runs_api
 
     app.include_router(auth_routes.router)
     app.include_router(conversations_api.router)
     app.include_router(me_api.router)
     app.include_router(messages_api.router)
+    app.include_router(runs_api.router)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
