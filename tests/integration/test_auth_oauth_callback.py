@@ -59,7 +59,7 @@ async def test_callback_success(
             },
         )
     assert r.status_code == 302
-    assert r.headers["location"].startswith("http://localhost:5173/")
+    assert r.headers["location"].startswith("http://127.0.0.1:5173/")
     assert "rehketo_session" in r.headers.get("set-cookie", "")
 
     users = (await db.execute(select(User))).scalars().all()
