@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID  # noqa: TC003  # used at runtime in Pydantic model + route path
 
@@ -79,9 +80,12 @@ async def run_events(
 
     async def _stream() -> AsyncIterator[dict[str, object]]:
         async for event in bus.subscribe(str(run_id), from_sequence=from_sequence):
+            # sse-starlette stringifies dict `data` via str() (producing Python
+            # repr with single quotes), so encode to JSON ourselves to keep the
+            # wire format parseable.
             yield {
                 "event": event["type"],
-                "data": event,
+                "data": json.dumps(event, default=str),
             }
             # Terminal states close the stream
             if event.get("type") == "run.status" and event.get("status") in (
