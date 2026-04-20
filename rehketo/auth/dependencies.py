@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Cookie, Depends, HTTPException
+from fastapi import Depends, HTTPException, Security
+from fastapi.security import APIKeyCookie
 from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002  # FastAPI needs runtime type for Depends()
 )
@@ -12,6 +13,16 @@ from sqlalchemy.ext.asyncio import (
 from rehketo.auth.cookies import SESSION_COOKIE
 from rehketo.auth.sessions import get_active_session
 from rehketo.db import get_session
+
+# APIKeyCookie(...) surfaces the cookie as a security requirement in the
+# generated OpenAPI schema, so /docs shows routes as auth-gated and tools
+# that consume openapi.json (codegen, Postman, etc.) see the dependency.
+# auto_error=False preserves our custom 401 body instead of Starlette's 403.
+_session_cookie = APIKeyCookie(
+    name=SESSION_COOKIE,
+    description="Session cookie set by /auth/login or /auth/devonly/login.",
+    auto_error=False,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +34,7 @@ class AuthContext:
 
 async def resolve_session(
     db: Annotated[AsyncSession, Depends(get_session)],
-    rehketo_session: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
+    rehketo_session: Annotated[str | None, Security(_session_cookie)] = None,
 ) -> AuthContext:
     if not rehketo_session:
         raise HTTPException(status_code=401, detail="missing session")
