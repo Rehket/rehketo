@@ -78,15 +78,9 @@ async def run_events(
 
     bus = request.app.state.event_bus
 
-    async def _stream() -> AsyncIterator[dict[str, object]]:
+    async def _stream() -> AsyncIterator[dict[str, str]]:
         async for event in bus.subscribe(str(run_id), from_sequence=from_sequence):
-            # sse-starlette stringifies dict `data` via str() (producing Python
-            # repr with single quotes), so encode to JSON ourselves to keep the
-            # wire format parseable.
-            yield {
-                "event": event["type"],
-                "data": json.dumps(event, default=str),
-            }
+            yield _encode_sse_event(event)
             # Terminal states close the stream
             if event.get("type") == "run.status" and event.get("status") in (
                 "succeeded",
@@ -96,6 +90,16 @@ async def run_events(
                 return
 
     return EventSourceResponse(_stream())
+
+
+def _encode_sse_event(event: dict[str, object]) -> dict[str, str]:
+    # sse-starlette stringifies dict `data` via str() (producing Python repr
+    # with single quotes), so encode to JSON ourselves to keep the wire format
+    # parseable. default=str handles datetime and similar non-JSON natives.
+    return {
+        "event": str(event["type"]),
+        "data": json.dumps(event, default=str),
+    }
 
 
 @router.post("/{run_id}/cancel", status_code=204)
