@@ -138,9 +138,14 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
             },
         )
 
-        # Title generation runs synchronously so the UI can update the
-        # sidebar title before the run closes. Swallows its own errors and
-        # returns None if nothing changed.
+        # Emit succeeded eagerly so the UI clears its 'running' indicator as
+        # soon as the reply is complete — before the title-generation window.
+        # The SSE handler does NOT close on succeeded; it waits for run.ended.
+        await bus.publish(str(run_id), {"type": "run.status", "status": "succeeded"})
+
+        # Title generation runs synchronously but no longer gates the user's
+        # perception of "done". Swallows its own errors; returns None when
+        # nothing changed.
         new_title = await generate_title_if_needed(conversation_id)
         if new_title is not None:
             await bus.publish(
@@ -152,7 +157,8 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                 },
             )
 
-        await bus.publish(str(run_id), {"type": "run.status", "status": "succeeded"})
+        # Terminator: tells the SSE handler it is safe to close the stream.
+        await bus.publish(str(run_id), {"type": "run.ended"})
 
     except Exception as exc:
         # Broad catch is intentional: this is a top-level task handler that
@@ -196,6 +202,7 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                 "error": {"code": "llm_failure", "message": str(exc)},
             },
         )
+        await bus.publish(str(run_id), {"type": "run.ended"})
 
     except asyncio.CancelledError:
         # Shield the finalizer so a second cancel during cleanup doesn't strand
@@ -230,6 +237,7 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
             await bus.publish(
                 str(run_id), {"type": "run.status", "status": "cancelled"}
             )
+            await bus.publish(str(run_id), {"type": "run.ended"})
 
         await asyncio.shield(_finalize_cancel())
         raise

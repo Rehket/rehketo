@@ -135,6 +135,9 @@ async def test_run_produces_streamed_assistant_message(
     assert payload["created_at"]  # server-assigned timestamp
     assert "hello" in payload["content"]["text"].lower()
 
+    # Last event is the run.ended terminator — that is what closes the stream.
+    assert types[-1] == "run.ended"
+
     # Assistant message must be persisted with the full streamed content.
     fresh_engine = create_async_engine(db_url, future=True)
     maker = async_sessionmaker(fresh_engine, expire_on_commit=False)

@@ -1,6 +1,12 @@
 """Integration test — conversation.updated event fires when title generation
-produces a new title, and it arrives BEFORE run.status=succeeded so the UI's
-sidebar can update before closing the stream.
+produces a new title. The protocol order is:
+  message.complete
+  run.status=succeeded   ← UI clears 'running' indicator here
+  conversation.updated   ← fires after title gen awaits
+  run.ended              ← SSE stream closes here
+
+This frees the UI from waiting on title generation to stop showing a stale
+'running' state after the reply is visible.
 
 Patches both ``build_agent`` and ``generate_title_if_needed`` to avoid any
 LLM calls.
@@ -42,7 +48,7 @@ async def _fake_title(_cid: Any) -> str:
 
 
 @pytest.mark.asyncio
-async def test_conversation_updated_emitted_before_succeeded(
+async def test_conversation_updated_arrives_after_succeeded_before_ended(
     settings_env: object,
     db_url: str,
     db: object,
@@ -98,14 +104,16 @@ async def test_conversation_updated_emitted_before_succeeded(
     assert updated["conversation_id"] == str(conv.id)
     assert updated["title"] == "Mocked Title"
 
-    # conversation.updated must arrive before the terminal run.status=succeeded.
-    updated_idx = types.index("conversation.updated")
+    # Ordering: message.complete → succeeded → conversation.updated → run.ended.
+    complete_idx = types.index("message.complete")
     succeeded_idx = next(
         i
         for i, e in enumerate(events)
         if e["type"] == "run.status" and e.get("status") == "succeeded"
     )
-    assert updated_idx < succeeded_idx
+    updated_idx = types.index("conversation.updated")
+    ended_idx = types.index("run.ended")
+    assert complete_idx < succeeded_idx < updated_idx < ended_idx
 
 
 @pytest.mark.asyncio

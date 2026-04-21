@@ -81,12 +81,12 @@ async def run_events(
     async def _stream() -> AsyncIterator[dict[str, str]]:
         async for event in bus.subscribe(str(run_id), from_sequence=from_sequence):
             yield _encode_sse_event(event)
-            # Terminal states close the stream
-            if event.get("type") == "run.status" and event.get("status") in (
-                "succeeded",
-                "failed",
-                "cancelled",
-            ):
+            # The agent publishes run.ended as the last event on every
+            # terminal path (succeeded / failed / cancelled). run.status
+            # alone is NOT a stream terminator — succeeded in particular
+            # fires before title generation, so closing on it would drop
+            # the subsequent conversation.updated.
+            if event.get("type") == "run.ended":
                 return
 
     return EventSourceResponse(_stream())
