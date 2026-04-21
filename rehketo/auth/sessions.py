@@ -55,3 +55,33 @@ async def revoke_session(db: AsyncSession, session_id: UUID | str) -> None:
         .values(revoked_at=now)
     )
     await db.commit()
+
+
+async def renew_if_past_halfway(
+    db: AsyncSession, session: SessionRow, *, ttl_minutes: int
+) -> bool:
+    """Sliding-window renewal: if more than half the original TTL has elapsed
+    since session creation, push expires_at out to now + ttl_minutes and
+    commit. Returns True when a renewal happened (so the caller can re-issue
+    the cookie's max_age), False otherwise.
+
+    Keeps actively-using users logged in across days without giving an
+    attacker an unbounded sliding window — idle sessions still expire at
+    their original expires_at.
+    """
+    if session.created_at is None:
+        return False
+    now = datetime.now(UTC)
+    original_ttl = session.expires_at - session.created_at
+    if original_ttl.total_seconds() <= 0:
+        return False
+    elapsed = now - session.created_at
+    if elapsed * 2 <= original_ttl:
+        return False
+    await db.execute(
+        update(SessionRow)
+        .where(SessionRow.id == session.id)
+        .values(expires_at=now + timedelta(minutes=ttl_minutes))
+    )
+    await db.commit()
+    return True
