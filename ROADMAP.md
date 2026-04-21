@@ -25,6 +25,7 @@ Small items that don't warrant a full plan doc. Each should land as one or two c
 - **Branch tidy-up.** Plan 1 + Plan 2 both live on `plan-1/api-foundation`. Either fast-forward to `main` or split Plan 2 to its own branch and PR individually — depends on how you want the git story to read.
 - **Responses API reopener.** When Bifrost's Anthropic-to-Responses translation populates `response.output` on the `response.completed` event, flip `use_responses_api=True` in `rehketo/agent/llm.py`. Docstring in that file records the failure mode.
 - **`asyncio.set_event_loop_policy` deprecation.** Python 3.16 will remove the API we use in `rehketo/main.py` and `rehketo/cli/serve.py`. Migrate to `asyncio.Runner(loop_factory=...)` before the runtime moves to 3.16.
+- **Context compression / analysis for `_load_history`.** The agent feeds the full message history to the LLM on every turn. Fast-follow after v1 UI ships and we can kick the tires with real conversations — the right shape (summarization, rolling window with checkpoints, tokenizer-budgeted packing, retrieval-augmented, or a hybrid) is a design call, not a mechanical last-N truncation.
 
 ---
 

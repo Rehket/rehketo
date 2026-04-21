@@ -166,9 +166,10 @@ Composer         (auto-resizing <textarea>, Enter=send, Shift+Enter=newline)
 5. UI opens `EventSource` on `/runs/<run_id>/events`.
 6. `message.delta` events append to the streaming bubble's text.
 7. On success: `message.complete` arrives carrying a full `MessageOut` (id, conversation_id, role, content, run_id, created_at, run_status='succeeded', run_error=null). UI swaps the streaming bubble's backing object for the server-authoritative one so a reload matches live state.
-8. If the backend also generated a conversation title, a `conversation.updated` event (`{conversation_id, title}`) arrives next. UI patches the sidebar entry.
-9. Terminal `run.status=succeeded` closes the stream.
-10. On failure/cancel: no `message.complete` — the backend persists whatever partial text was accumulated as an assistant message and emits `run.status={failed|cancelled}` directly. UI converts the streaming bubble to a terminal bubble with the appropriate badge (red "Failed" with `error.code + message`, or amber "Cancelled"). On subsequent reload, `GET /conversations/{id}` returns the partial message with `run_status` and `run_error` populated, so the UI renders the same badge.
+8. `run.status=succeeded` arrives immediately after — UI clears the "running" indicator. Stream is NOT closed yet.
+9. If the backend generated a conversation title (awaited server-side before the next event is emitted), a `conversation.updated` event (`{conversation_id, title}`) arrives next. UI patches the sidebar entry.
+10. `run.ended` closes the stream.
+11. On failure/cancel: no `message.complete` — the backend persists whatever partial text was accumulated as an assistant message and emits `run.status={failed|cancelled}` directly, then `run.ended`. UI converts the streaming bubble to a terminal bubble with the appropriate badge (red "Failed" with `error.code + message`, or amber "Cancelled"). On subsequent reload, `GET /conversations/{id}` returns the partial message with `run_status` and `run_error` populated, so the UI renders the same badge. **Empty-text edge case:** when a run fails/cancels before any `message.delta`, the persisted partial has `content.text === ""`. The UI renders a placeholder bubble with the badge — `"No response — the run was <failed|cancelled>"` plus the error affordance — so the attempt stays visible rather than leaving only the user message on screen.
 
 ---
 
@@ -223,7 +224,8 @@ type RunEvent =
       sequence: number; run_id: string }
   | { type: 'run.status'; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
       error?: { code: string; message: string };
-      sequence: number; run_id: string };
+      sequence: number; run_id: string }
+  | { type: 'run.ended'; sequence: number; run_id: string };
 
 type MessageOut = {
   id: string;
@@ -237,20 +239,41 @@ type MessageOut = {
 };
 ```
 
-Per-run state machine: `idle → queued → streaming → done`. Driven by event arrivals.
+Per-run state machine: `idle → queued → streaming → terminal → closed`. Driven by event arrivals.
+
+Protocol order on success:
+
+```
+message.delta*  →  message.complete  →  run.status=succeeded
+                                        ↓
+                                        (backend awaits title generation)
+                                        ↓
+                   [conversation.updated]  (only if a title was generated)
+                                        ↓
+                                     run.ended   ← SSE handler closes HERE
+```
+
+Protocol order on failure / cancel (no `message.complete`):
+
+```
+message.delta*  →  run.status={failed|cancelled}  →  run.ended
+```
 
 - Open EventSource on `/runs/<id>/events`.
 - `message.delta`: append `delta` to streaming bubble's text rune.
 - `message.complete` (success path only): replace streaming bubble backing object with `message` (server-authoritative IDs/timestamps). Run state → awaiting terminal.
-- `conversation.updated`: patch the sidebar store's title for that conversation. Only arrives on success paths after `message.complete`.
-- `run.status=succeeded`: close the stream.
-- `run.status=failed`: close the stream. No preceding `message.complete` — the streaming bubble (with whatever partial text was accumulated) is the terminal artifact. Convert it to a failed bubble carrying `error.code + message`. The backend has persisted this partial as an assistant message linked to the failed run, so a subsequent `GET /conversations/{id}` will return it with `run_status='failed'`.
-- `run.status=cancelled`: close the stream. Same "no message.complete" shape as failed. Convert streaming bubble to a cancelled bubble (no error). Partial text is persisted the same way.
+- `run.status=succeeded`: UI clears the "running" indicator and marks the bubble as settled. Does NOT close the stream — `conversation.updated` may still arrive.
+- `conversation.updated`: patch the sidebar store's title for that conversation. Only arrives on success paths after `run.status=succeeded`.
+- `run.status=failed`: UI converts the streaming bubble to a failed bubble carrying `error.code + message`. No preceding `message.complete` — the streaming bubble IS the terminal artifact. The backend has persisted this partial as an assistant message linked to the failed run, so a subsequent `GET /conversations/{id}` will return it with `run_status='failed'`.
+- `run.status=cancelled`: same shape as failed. Convert streaming bubble to a cancelled bubble (no error). Partial text is persisted the same way.
+- `run.ended`: SSE handler closes the stream. The ONLY event that closes the stream — `run.status` alone is a state signal, not a terminator.
 - `error` event (native EventSource): close stream, show "Disconnected — reload to retry" banner.
 - Unsubscribe on route change / component unmount.
 - No auto-reconnect in v1.
 
-**Terminal-without-complete contract.** The UI must NOT assume every terminal `run.status` is preceded by a `message.complete`. Only `succeeded` guarantees it. For `failed` and `cancelled` the streaming bubble is the source of truth until a reload hydrates the persisted version.
+**Why `run.ended` is separate from `run.status`.** Title generation takes an LLM round-trip (seconds). If the stream closed on `run.status=succeeded`, the subsequent `conversation.updated` would be dropped and the sidebar title would lag until the next full page reload. Emitting `succeeded` eagerly + closing on an explicit `run.ended` lets the UI clear its "running" indicator immediately while still picking up the title update in the same stream.
+
+**Terminal-without-complete contract.** The UI must NOT assume every `run.status=succeeded` event is preceded by a `message.complete` — it IS on the success path, but `failed` and `cancelled` paths skip `message.complete` entirely. The streaming bubble is the terminal artifact in those cases, until a reload hydrates the persisted version from `GET /conversations/{id}`.
 
 ### 5.5 Markdown rendering (`lib/markdown.ts`)
 
@@ -274,8 +297,8 @@ On first page load after login, the CSRF cookie is already set (backend delivere
 | 403 on any fetch | Toast with envelope `message`; console warning. |
 | 500 / 502 / network | Inline banner on the affected view with manual retry button. No auto-retry. |
 | SSE `error` event | Stream closes; chat header banner: "Disconnected — reload to resume". |
-| SSE `run.status=failed` | Assistant bubble gets a red "Failed" affordance with `error.code + message`. No preceding `message.complete` — the streaming bubble IS the terminal bubble. On reload, the backend surfaces the partial message with `run_status='failed'` and `run_error` populated. User can compose again. |
-| Cancel in-flight | Cancel button next to the streaming indicator → `POST /runs/<id>/cancel`. Bubble settles to partial text, labeled "Cancelled". Partial text is persisted server-side (same shape as failed); reload shows it with `run_status='cancelled'` and an amber badge. |
+| SSE `run.status=failed` | Assistant bubble gets a red "Failed" affordance with `error.code + message`. No preceding `message.complete` — the streaming bubble IS the terminal bubble. On reload, the backend surfaces the partial message with `run_status='failed'` and `run_error` populated. User can compose again. If `content.text` is empty (failure before first delta), render a placeholder bubble `"No response — the run failed: <error.message>"` so the attempt stays visible. |
+| Cancel in-flight | Cancel button next to the streaming indicator → `POST /runs/<id>/cancel` (returns 204 while in flight, 409 on a run that already terminated — treat 409 as "nothing to cancel"). Bubble settles to partial text, labeled "Cancelled". Partial text is persisted server-side (same shape as failed); reload shows it with `run_status='cancelled'` and an amber badge. Empty-text edge case: render `"No response — the run was cancelled"`. |
 | OAuth callback failure | Login page reads `?auth_error=<code>` and maps to a friendly message via the vocabulary below. Unknown codes fall back to a generic "Sign-in failed — please try again." |
 | Unhandled boundary | `+error.svelte` catches load-time failures; shows a reload-friendly shell. |
 
@@ -327,6 +350,7 @@ Not in scope for v1 but called out so the plan doesn't anticipate them:
 - **Elevation flows.** Second cookie `session_elevated`, orthogonal to `check_permission`, triggered by first dangerous action per backend ROADMAP.
 - **Connection consent UI** for downstream OAuth (MS Graph, Google, etc.) once backend Plan "Connections" lands.
 - **Dark/light mode toggle.** Workbench aesthetic is dark by default; a toggle is a small follow-up.
+- **Context compression for long conversations.** `_load_history` in `rehketo/agent/run.py` currently feeds the full message history to the LLM on every turn. This is a known ceiling — a fast-follow after v1 kicks the tires. The solution is a real context-compression design (summarization, rolling window with checkpoints, tokenizer-budgeted packing, or a hybrid), not a mechanical last-N cap.
 
 ---
 
