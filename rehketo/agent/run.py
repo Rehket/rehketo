@@ -26,6 +26,9 @@ logger = get_logger(__name__)
 async def _load_history(
     db: AsyncSession, conversation_id: UUID
 ) -> list[AIMessage | HumanMessage | SystemMessage]:
+    """Load prior user/assistant turns for the agent. The system prompt is
+    set by `build_agent` via create_deep_agent(system_prompt=...); do NOT
+    prepend one here or the model sees the same prompt twice."""
     msgs = (
         await db.execute(
             select(Message)
@@ -33,9 +36,7 @@ async def _load_history(
             .order_by(Message.created_at)
         )
     ).scalars().all()
-    result: list[AIMessage | HumanMessage | SystemMessage] = [
-        SystemMessage(content="You are a helpful assistant.")
-    ]
+    result: list[AIMessage | HumanMessage | SystemMessage] = []
     for m in msgs:
         text = (
             m.content
@@ -67,7 +68,6 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
         history = await _load_history(db, conversation_id)
 
     assembled_text = ""
-    assembled_message_id: str | None = None
 
     try:
         async for agent in build_agent(str(run_id)):
@@ -80,9 +80,6 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                     await bus.publish(str(run_id), event)
                     if event["type"] == "message.delta":
                         assembled_text += str(event["delta"])
-                        assembled_message_id = (
-                            str(event.get("message_id")) or assembled_message_id
-                        )
 
         # Persist the assistant message and finalize the run.
         assistant_id = uuid4()
