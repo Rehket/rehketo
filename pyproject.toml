@@ -43,6 +43,12 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Skip tests that hit real external dependencies by default. Opt in with:
+#   uv run pytest -m live_deps
+addopts = "-m 'not live_deps'"
+markers = [
+    "live_deps: tests that hit real external services (the checkpointer, Bifrost, Anthropic). Skipped unless you pass -m live_deps.",
+]
 
 [tool.uv]
 exclude-newer = "1 days"
