@@ -126,6 +126,8 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                 "created_at": persisted.created_at.isoformat()
                 if persisted.created_at
                 else None,
+                "run_status": "succeeded",
+                "run_error": None,
             }
 
         await bus.publish(
@@ -159,12 +161,31 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
         # is NOT a subclass of Exception in Python 3.8+, so it is not caught here.
         logger.exception("run_agent failed run_id=%s", str(run_id))
         async with sessionmaker()() as db:
+            # Persist whatever partial assistant text the stream produced.
+            # GET /conversations/{id} joins Run.status/Run.error so the UI
+            # can render this bubble with a 'failed' badge on reload without
+            # replaying the SSE stream. Empty text is fine — it still marks
+            # that an attempt happened.
+            db.add(
+                Message(
+                    id=uuid4(),
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content={"text": assembled_text},
+                    run_id=run_id,
+                )
+            )
             await db.execute(
                 update(Run).where(Run.id == run_id).values(
                     status="failed",
                     error={"code": "llm_failure", "message": str(exc)},
                     finished_at=datetime.now(UTC),
                 )
+            )
+            await db.execute(
+                update(Conversation)
+                .where(Conversation.id == conversation_id)
+                .values(updated_at=datetime.now(UTC))
             )
             await db.commit()
         await bus.publish(
@@ -182,11 +203,28 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
         # the cancellation so asyncio marks the task as cancelled.
         async def _finalize_cancel() -> None:
             async with sessionmaker()() as db:
+                # Persist the partial assistant text, same rationale as the
+                # failed branch — reload shows a 'cancelled' badge via the
+                # run_status join on MessageOut.
+                db.add(
+                    Message(
+                        id=uuid4(),
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content={"text": assembled_text},
+                        run_id=run_id,
+                    )
+                )
                 await db.execute(
                     update(Run).where(Run.id == run_id).values(
                         status="cancelled",
                         finished_at=datetime.now(UTC),
                     )
+                )
+                await db.execute(
+                    update(Conversation)
+                    .where(Conversation.id == conversation_id)
+                    .values(updated_at=datetime.now(UTC))
                 )
                 await db.commit()
             await bus.publish(

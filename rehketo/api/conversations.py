@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from rehketo.db import get_session
-from rehketo.db.models import Conversation, Message
+from rehketo.db.models import Conversation, Message, Run
 from rehketo.permissions.dependencies import ResolvedPermissions, resolve_permissions
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -44,10 +44,17 @@ class ConversationList(BaseModel):
 
 class MessageOut(BaseModel):
     id: UUID
+    conversation_id: UUID
     role: str
     content: dict[str, object]
     run_id: UUID | None
     created_at: datetime
+    # Terminal state of the linked run, joined from `runs`. Null when the
+    # message has no run (user messages) or when the run is still in flight.
+    # UI uses this to render 'cancelled' or 'failed' badges on reload without
+    # replaying the SSE stream.
+    run_status: str | None = None
+    run_error: dict[str, object] | None = None
 
 
 class ConversationDetail(ConversationSummary):
@@ -123,13 +130,17 @@ async def get_conversation(
     ).scalar_one_or_none()
     if conv is None:
         raise HTTPException(status_code=404, detail="conversation not found")
-    msgs = (
+    rows = (
         await db.execute(
-            select(Message)
+            select(Message, Run.status, Run.error)
+            .outerjoin(Run, Run.id == Message.run_id)
             .where(Message.conversation_id == conv.id)
             .order_by(Message.created_at)
         )
-    ).scalars().all()
+    ).all()
+    # Treat in-flight runs (queued/running) as "no terminal status yet" on the
+    # wire — the UI only uses run_status to render terminal-state badges.
+    terminal = {"succeeded", "failed", "cancelled"}
     return ConversationDetail(
         id=conv.id,
         title=conv.title,
@@ -138,12 +149,15 @@ async def get_conversation(
         messages=[
             MessageOut(
                 id=m.id,
+                conversation_id=m.conversation_id,
                 role=m.role,
                 content=m.content,
                 run_id=m.run_id,
                 created_at=m.created_at,
+                run_status=run_status if run_status in terminal else None,
+                run_error=run_error if run_status in terminal else None,
             )
-            for m in msgs
+            for m, run_status, run_error in rows
         ],
     )
 
