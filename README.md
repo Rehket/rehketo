@@ -18,7 +18,8 @@ See `docs/superpowers/specs/` for the design spec and `docs/superpowers/plans/` 
 
 - Docker Desktop (or equivalent — the stack runs on vanilla `docker compose`).
 - [`uv`](https://docs.astral.sh/uv/) with Python 3.14 available.
-- An Entra app registration with redirect URI `http://127.0.0.1:8000/auth/callback`. For the ship-check below you can skip real Entra login and use `/auth/devonly/login` instead — you still need the client id / tenant id / client secret in env so the app starts cleanly.
+- An Entra app registration with redirect URI `http://localhost:8000/auth/callback`. For the ship-check below you can 
+  skip real Entra login and use `/auth/devonly/login` instead — you still need the client id / tenant id / client secret in env so the app starts cleanly.
 - An **Anthropic API key** for live chat turns, supplied to Bifrost through its admin UI (the test suite does not need one — tests mock Bifrost).
 
 ---
