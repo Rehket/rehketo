@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import contextlib
 from typing import Annotated
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
+import httpx
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
@@ -23,8 +25,11 @@ from rehketo.auth.cookies import (
 )
 from rehketo.auth.csrf import issue_csrf_token
 from rehketo.config import get_settings
+from rehketo.core.logging import get_logger
 from rehketo.db import get_session as db_session
 from rehketo.db.models import Identity, User, UserRole
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -55,6 +60,28 @@ async def login() -> RedirectResponse:
     _set_oauth_cookie(
         resp, OAUTH_VERIFIER_COOKIE, start.code_verifier, secure=s.cookie_secure
     )
+    return resp
+
+
+def _oauth_error_redirect(exc: httpx.HTTPStatusError) -> RedirectResponse:
+    code = "token_exchange_failed"
+    with contextlib.suppress(ValueError):
+        body = exc.response.json()
+        if isinstance(body, dict):
+            err = body.get("error")
+            if isinstance(err, str) and err:
+                code = err
+    logger.warning(
+        "entra token exchange failed: status=%s code=%s",
+        exc.response.status_code,
+        code,
+    )
+    s = get_settings()
+    sep = "&" if "?" in s.ui_post_login_url else "?"
+    target = f"{s.ui_post_login_url}{sep}auth_error={quote(code)}"
+    resp = RedirectResponse(target, status_code=302)
+    resp.delete_cookie(OAUTH_STATE_COOKIE, path="/auth/")
+    resp.delete_cookie(OAUTH_VERIFIER_COOKIE, path="/auth/")
     return resp
 
 
@@ -113,7 +140,10 @@ async def callback(
     if state != rehketo_oauth_state:
         raise HTTPException(status_code=400, detail="oauth state mismatch")
 
-    tokens = await entra.exchange_code_for_tokens(code, rehketo_oauth_verifier)
+    try:
+        tokens = await entra.exchange_code_for_tokens(code, rehketo_oauth_verifier)
+    except httpx.HTTPStatusError as exc:
+        return _oauth_error_redirect(exc)
     id_token = tokens.get("id_token")
     if not isinstance(id_token, str):
         raise HTTPException(status_code=502, detail="no id_token in token response")
