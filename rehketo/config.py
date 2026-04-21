@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     bifrost_api_key: SecretStr = SecretStr("dev-noop")
     agent_model: str = "claude-sonnet-4-6"
 
+    # Absolute path to the built SvelteKit static bundle (index.html + assets).
+    # When set, FastAPI mounts it at / with SPA fallback. Unset in dev — the
+    # UI runs under the Vite dev server on :5173 and proxies /auth, /conversations,
+    # /runs, /me, etc. to the backend.
+    ui_static_dir: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

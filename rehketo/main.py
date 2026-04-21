@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, FastAPI
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import FileResponse
 
 # psycopg3 async cannot use Windows's default ProactorEventLoop. Force the
 # SelectorEventLoop policy at import time so uvicorn picks it up when it
@@ -126,8 +128,44 @@ def create_app() -> FastAPI:
         return app.openapi()
 
     _install_openapi_csrf_scheme(app)
+    _mount_ui_static_bundle_if_configured(app)
 
     return app
+
+
+def _mount_ui_static_bundle_if_configured(app: FastAPI) -> None:
+    """When UI_STATIC_DIR points at a built SvelteKit bundle, serve it at /
+    with SPA fallback: real files under the dir resolve directly, anything
+    else returns index.html so client-side routes (like /c/<uuid>) survive a
+    full page load. API routers (auth, conversations, runs, me, docs,
+    openapi.json, healthz) are registered first so their paths win over this
+    catch-all. A no-op when UI_STATIC_DIR is unset (dev runs the UI under
+    Vite separately)."""
+    settings = get_settings()
+    if not settings.ui_static_dir:
+        return
+    ui_dir = Path(settings.ui_static_dir)
+    if not ui_dir.is_dir():
+        logger.warning(
+            "UI_STATIC_DIR is set but does not exist: %s", settings.ui_static_dir
+        )
+        return
+    index_html = ui_dir / "index.html"
+    if not index_html.is_file():
+        logger.warning(
+            "UI_STATIC_DIR has no index.html, skipping mount: %s",
+            settings.ui_static_dir,
+        )
+        return
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def _ui_catchall(full_path: str) -> FileResponse:
+        if full_path:
+            candidate = (ui_dir / full_path).resolve()
+            # Reject traversal: candidate must remain under ui_dir.
+            if candidate.is_file() and candidate.is_relative_to(ui_dir.resolve()):
+                return FileResponse(candidate)
+        return FileResponse(index_html)
 
 
 app = create_app()
