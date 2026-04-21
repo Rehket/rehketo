@@ -22,15 +22,9 @@ References:
 
 Small items that don't warrant a full plan doc. Each should land as one or two commits.
 
-- **OAuth callback error handling.** Catch `httpx.HTTPStatusError` from `entra.exchange_code_for_tokens` and redirect to the UI with `?auth_error=<aadsts>` instead of leaking a 500 + stack trace.
-- **Default role on new user.** Right now a fresh Entra login creates `users` + `identities` rows but no `user_roles`, so the user 403s on everything until someone with DB access grants a role. Decide on a policy (first-user-is-admin, default-is-`User`, require explicit invite, etc.) and implement.
 - **Branch tidy-up.** Plan 1 + Plan 2 both live on `plan-1/api-foundation`. Either fast-forward to `main` or split Plan 2 to its own branch and PR individually — depends on how you want the git story to read.
 - **Responses API reopener.** When Bifrost's Anthropic-to-Responses translation populates `response.output` on the `response.completed` event, flip `use_responses_api=True` in `rehketo/agent/llm.py`. Docstring in that file records the failure mode.
 - **`asyncio.set_event_loop_policy` deprecation.** Python 3.16 will remove the API we use in `rehketo/main.py` and `rehketo/cli/serve.py`. Migrate to `asyncio.Runner(loop_factory=...)` before the runtime moves to 3.16.
-- **SSE encoding test.** Add a unit test for the `json.dumps` wrapper in `rehketo/api/runs.py` so a future refactor can't silently re-introduce the sse-starlette Python-`repr` bug.
-- **Cancellation shield test.** Add an integration test that delivers a second `task.cancel()` during the finalizer and asserts the run still transitions to `cancelled`.
-- **CSRF header security scheme.** Surface `X-CSRF-Token` as an `APIKeyHeader` `Security(...)` dep so `/docs` renders unsafe-method routes as requiring it, matching what the middleware actually enforces.
-- **Auth-gate `/docs` + `/openapi.json`.** Currently the whole surface is readable anonymously. For an internal tool this is fine; for anything else put both behind `resolve_session`.
 
 ---
 
