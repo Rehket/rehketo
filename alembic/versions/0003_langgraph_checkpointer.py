@@ -10,12 +10,15 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import sys
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
-from alembic import op
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
+from alembic import op
 from rehketo.config import get_settings
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 revision: str = "0003"
 down_revision: str | None = "0002"
