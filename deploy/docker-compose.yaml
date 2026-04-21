@@ -39,5 +39,38 @@ services:
       postgres:
         condition: service_healthy
 
+  # Prod-like runner for the API. Local dev typically skips this and uses
+  # `uv run rehketo-serve` on the host for hot reload. Bring up with
+  # `docker compose up rehketo-api` when you want a container-built run.
+  rehketo-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: rehketo-api:local
+    ports: ["8000:8000"]
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rehketo}:${POSTGRES_PASSWORD:-rehketo}@postgres:5432/rehketo
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY}
+      CSRF_SIGNING_KEY: ${CSRF_SIGNING_KEY}
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
+      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID}
+      ENTRA_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET}
+      ENTRA_REDIRECT_URI: ${ENTRA_REDIRECT_URI}
+      UI_POST_LOGIN_URL: ${UI_POST_LOGIN_URL}
+      DEVONLY_LOGIN_ENABLED: ${DEVONLY_LOGIN_ENABLED:-false}
+      BIFROST_BASE_URL: http://bifrost:8080/v1
+      BIFROST_API_KEY: ${BIFROST_API_KEY:-dev-noop}
+      AGENT_MODEL: ${AGENT_MODEL:-claude-sonnet-4-6}
+      # Set to the built SvelteKit bundle path inside the container to
+      # serve rehketo-ui same-origin. Unset = API-only (dev contributors run
+      # Vite separately on 5173).
+      UI_STATIC_DIR: ${UI_STATIC_DIR:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bifrost:
+        condition: service_started
+
 volumes:
   pgdata:
