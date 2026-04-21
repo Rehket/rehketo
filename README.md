@@ -18,9 +18,17 @@ See `docs/superpowers/specs/` for the design spec and `docs/superpowers/plans/` 
 
 - Docker Desktop (or equivalent — the stack runs on vanilla `docker compose`).
 - [`uv`](https://docs.astral.sh/uv/) with Python 3.14 available.
-- An Entra app registration with redirect URI `http://localhost:8000/auth/callback`. For the ship-check below you can 
-  skip real Entra login and use `/auth/devonly/login` instead — you still need the client id / tenant id / client secret in env so the app starts cleanly.
+- An Entra app registration with **two** redirect URIs — one for each environment you run in:
+  - Dev: `http://localhost:5173/auth/callback` (the SvelteKit UI origin; Vite proxies `/auth/*` to the backend).
+  - Prod: `https://<your-host>/auth/callback` (same origin as your deployed API).
+  For the ship-check below you can skip real Entra login and use `/auth/devonly/login` instead — you still need the client id / tenant id / client secret in env so the app starts cleanly.
 - An **Anthropic API key** for live chat turns, supplied to Bifrost through its admin UI (the test suite does not need one — tests mock Bifrost).
+
+### Why the dev redirect URI is on :5173, not :8000
+
+The OAuth round-trip must terminate on the UI origin so the session cookies set by `/auth/callback` land for the origin the UI runs on. If you pointed Entra at `http://localhost:8000/auth/callback`, the cookies would be scoped to `:8000` and the UI at `:5173` would never see them. The Vite dev proxy forwards the `/auth/*` path to the backend without changing origin, so one Entra configuration covers both the request path (backend) and the cookie scope (UI).
+
+**Dev startup order:** bring Postgres + Bifrost up first, then start the backend (`uv run rehketo-serve` on 8000), then start the UI (`pnpm dev` in `rehketo-ui/` on 5173), then open `http://localhost:5173/auth/login`.
 
 ---
 
