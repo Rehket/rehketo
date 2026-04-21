@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import sys
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from fastapi.openapi.utils import get_openapi
 
 # psycopg3 async cannot use Windows's default ProactorEventLoop. Force the
 # SelectorEventLoop policy at import time so uvicorn picks it up when it
@@ -20,13 +21,56 @@ if TYPE_CHECKING:
 
 from rehketo.agent.sweep import sweep_abandoned_runs
 from rehketo.api.errors import install_error_handlers
-from rehketo.auth.csrf_middleware import CSRFMiddleware
+from rehketo.auth.cookies import CSRF_HEADER
+from rehketo.auth.csrf_middleware import CSRF_EXEMPT_PREFIXES, CSRFMiddleware
+from rehketo.auth.dependencies import AuthContext, resolve_session
 from rehketo.config import get_settings
 from rehketo.core.logging import get_logger
 from rehketo.runs.event_bus import InProcessEventBus
 from rehketo.runs.registry import get_registry
 
 logger = get_logger(__name__)
+
+_UNSAFE_METHODS_LC: frozenset[str] = frozenset({"post", "put", "patch", "delete"})
+
+
+def _install_openapi_csrf_scheme(app: FastAPI) -> None:
+    """Override app.openapi to declare X-CSRF-Token as a required header on
+    every unsafe-method operation that isn't CSRF-exempt. Keeps routes clean
+    — the middleware is the enforcer; this is purely schema declarative."""
+
+    def _openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            routes=app.routes,
+        )
+        components = schema.setdefault("components", {})
+        schemes = components.setdefault("securitySchemes", {})
+        schemes["CSRFToken"] = {
+            "type": "apiKey",
+            "in": "header",
+            "name": CSRF_HEADER,
+            "description": (
+                "Double-submit CSRF token. Required on all unsafe methods "
+                "except /auth/* and /healthz."
+            ),
+        }
+        for path, path_item in schema.get("paths", {}).items():
+            if any(path.startswith(p) for p in CSRF_EXEMPT_PREFIXES):
+                continue
+            if not isinstance(path_item, dict):
+                continue
+            for method, op in path_item.items():
+                if method not in _UNSAFE_METHODS_LC or not isinstance(op, dict):
+                    continue
+                op.setdefault("security", []).append({"CSRFToken": []})
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = _openapi  # type: ignore[method-assign]
 
 
 @asynccontextmanager
@@ -45,8 +89,11 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
         # Stock /docs assumes Bearer auth; we serve a Pattern B-aware replacement
         # from rehketo.api.docs that threads cookies + the CSRF header for us.
+        # openapi_url=None disables the default anonymous schema route; we
+        # remount it below behind resolve_session.
         docs_url=None,
         redoc_url=None,
+        openapi_url=None,
     )
     install_error_handlers(app)
     app.add_middleware(CSRFMiddleware)
@@ -71,6 +118,14 @@ def create_app() -> FastAPI:
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/openapi.json", include_in_schema=False)
+    async def openapi_schema(
+        _auth: Annotated[AuthContext, Depends(resolve_session)],
+    ) -> dict[str, Any]:
+        return app.openapi()
+
+    _install_openapi_csrf_scheme(app)
 
     return app
 

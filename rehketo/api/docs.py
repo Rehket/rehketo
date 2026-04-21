@@ -17,8 +17,12 @@ Workflow for a developer:
 """
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
+
+from rehketo.auth.dependencies import AuthContext, resolve_session
 
 router = APIRouter(include_in_schema=False)
 
@@ -67,5 +71,7 @@ _SWAGGER_UI_HTML = """<!DOCTYPE html>
 
 
 @router.get("/docs")
-async def custom_swagger_ui() -> HTMLResponse:
+async def custom_swagger_ui(
+    _auth: Annotated[AuthContext, Depends(resolve_session)],
+) -> HTMLResponse:
     return HTMLResponse(_SWAGGER_UI_HTML)
