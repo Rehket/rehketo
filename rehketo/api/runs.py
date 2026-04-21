@@ -102,6 +102,11 @@ def _encode_sse_event(event: dict[str, object]) -> dict[str, str]:
     }
 
 
+_TERMINAL_RUN_STATES: frozenset[str] = frozenset(
+    {"succeeded", "failed", "cancelled"}
+)
+
+
 @router.post("/{run_id}/cancel", status_code=204)
 async def cancel_run(
     run_id: UUID,
@@ -121,5 +126,7 @@ async def cancel_run(
     ).scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="run not found")
+    if run.status in _TERMINAL_RUN_STATES:
+        raise HTTPException(status_code=409, detail=f"run already {run.status}")
     registry = request.app.state.task_registry
     registry.cancel(run_id)
