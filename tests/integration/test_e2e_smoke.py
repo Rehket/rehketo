@@ -85,8 +85,10 @@ async def test_full_lifecycle(settings_env, db_url) -> None:
         assert r.status_code == 200
         assert r.json()["items"] == []
 
-        # Logout revokes the session
-        r = await c.post("/auth/logout", cookies=auth_cookies)
+        # Logout revokes the session (CSRF-enforced)
+        r = await c.post(
+            "/auth/logout", cookies=auth_cookies, headers=auth_headers
+        )
         assert r.status_code == 204
 
         # Subsequent authorized call rejected

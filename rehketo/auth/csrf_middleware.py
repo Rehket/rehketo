@@ -18,7 +18,6 @@ UNSAFE_METHODS: frozenset[str] = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/auth/login",
     "/auth/callback",
-    "/auth/logout",
     "/auth/devonly/login",
     "/healthz",
 )
