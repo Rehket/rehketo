@@ -91,6 +91,7 @@ async def _upsert_user_and_identity(
     db.add(user)
     await db.flush()
     db.add(Identity(provider="entra", provider_subject=subject_str, user_id=user.id))
+    db.add(UserRole(user_id=user.id, role="User"))
     await db.commit()
     return user
 
