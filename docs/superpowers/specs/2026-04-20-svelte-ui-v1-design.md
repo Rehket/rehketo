@@ -79,16 +79,20 @@ rehketo-ui/
 
 - `pnpm dev` runs SvelteKit on `localhost:5173`.
 - `vite.config.ts` proxies `/auth`, `/conversations`, `/runs`, `/me`, `/openapi.json`, `/docs` to `http://127.0.0.1:8000`.
-- Browser sees one origin, cookies flow unchanged.
-- FastAPI runs as today (`uv run rehketo-serve` or equivalent).
+- Browser sees one origin (`localhost:5173`), cookies flow unchanged.
+- FastAPI runs as today (`uv run rehketo-serve` or equivalent) on `127.0.0.1:8000`.
+
+**Entra redirect URI must also live on the UI origin.** Set `ENTRA_REDIRECT_URI=http://localhost:5173/auth/callback` in the backend's `.env`. The Vite proxy forwards that path to the backend transparently, but the browser's origin stays `:5173` — so the session and CSRF cookies set on the callback response land for the UI to read. Pointing Entra at `:8000` directly scopes cookies to the backend port and breaks the whole flow. Two redirect URIs must exist in the Entra app registration: dev (`localhost:5173`) and prod (your deployed host).
+
+**Dev startup order:** Postgres + Bifrost → backend → UI → open `http://localhost:5173/auth/login`. Docker compose only includes Postgres, Bifrost, and a prod-like `rehketo-api` service; local iteration uses `uv run rehketo-serve` on the host for hot reload.
 
 ### 2.4 Prod topology
 
 - `pnpm build` → `rehketo-ui/build/` (static files).
-- FastAPI mounts that directory via `StaticFiles(directory=..., html=True)` at `/`, with SPA fallback returning `index.html` for unknown paths.
-- API routers stay on their existing prefixes (`/auth`, `/conversations`, `/runs`, `/me`, `/openapi.json`, `/docs`, `/healthz`). `StaticFiles` is mounted last so API routes win.
-- One origin, one process, zero CORS, cookies same-origin.
-- How the build bundle gets into the API image is a plan/deploy concern (docker copy, git submodule, CI artifact) — not pinned here.
+- Backend config gains one env var: `UI_STATIC_DIR` (absolute path to the built bundle inside the process's filesystem). When set, `rehketo.main` registers a catch-all `GET /{full_path:path}` that serves real files from the bundle and falls back to `index.html` for unknown paths (SPA routing like `/c/<uuid>` survives a page load).
+- API routers (`/auth`, `/conversations`, `/runs`, `/me`, `/openapi.json`, `/docs`, `/healthz`) are registered before the catch-all, so their paths win.
+- One origin, one process, zero CORS, cookies same-origin, `UI_POST_LOGIN_URL=/` works in both dev and prod.
+- Getting the build bundle into the container: either (a) multi-stage Dockerfile with a `pnpm build` stage that COPYs `build/` into the API image at a known path, or (b) CI builds separately and mounts the bundle volume. Either is compatible with the `UI_STATIC_DIR` contract.
 
 ### 2.5 Config
 
@@ -134,7 +138,7 @@ If the bit is off, the element doesn't render (not just disabled). UI never reco
 ```
 Sidebar.svelte
 ├── NewChatButton          → POST /conversations → goto(`/c/<id>`)
-├── ConversationList       ← GET /conversations (archived=false)
+├── ConversationList       ← GET /conversations?include_archived=false
 │   └── ConversationListItem
 │       └── ConversationMenu (inline rename, archive)
 └── UserMenu               (avatar + email; logout → POST /auth/logout → /login)
@@ -161,8 +165,10 @@ Composer         (auto-resizing <textarea>, Enter=send, Shift+Enter=newline)
 4. UI optimistically appends user bubble and a streaming assistant bubble.
 5. UI opens `EventSource` on `/runs/<run_id>/events`.
 6. `message.delta` events append to the streaming bubble's text.
-7. `message.complete` replaces the streaming bubble with the server-persisted message object (so a reload shows the same DB row).
-8. `run.status={succeeded|failed|cancelled}` closes the stream and updates the header indicator.
+7. On success: `message.complete` arrives carrying a full `MessageOut` (id, conversation_id, role, content, run_id, created_at, run_status='succeeded', run_error=null). UI swaps the streaming bubble's backing object for the server-authoritative one so a reload matches live state.
+8. If the backend also generated a conversation title, a `conversation.updated` event (`{conversation_id, title}`) arrives next. UI patches the sidebar entry.
+9. Terminal `run.status=succeeded` closes the stream.
+10. On failure/cancel: no `message.complete` — the backend persists whatever partial text was accumulated as an assistant message and emits `run.status={failed|cancelled}` directly. UI converts the streaming bubble to a terminal bubble with the appropriate badge (red "Failed" with `error.code + message`, or amber "Cancelled"). On subsequent reload, `GET /conversations/{id}` returns the partial message with `run_status` and `run_error` populated, so the UI renders the same badge.
 
 ---
 
@@ -189,7 +195,9 @@ Rune-backed store:
 let authState = $state<{user: User; capabilities: Set<Action>} | null>(null);
 ```
 
-Hydrated by `+layout.ts` on first load. Consumed throughout the shell. Logout: `POST /auth/logout` → clear rune → `goto('/login')`.
+Hydrated by `+layout.ts` on first load. The backend's `GET /me/capabilities` returns `{actions: string[]}` — the hydration helper deserializes to `new Set(body.actions)` so lookups are O(1). The reverse is never needed (UI doesn't POST capabilities anywhere).
+
+Logout: `POST /auth/logout` with the `X-CSRF-Token` header (required — `/auth/logout` is CSRF-enforced so cross-site logout can't silently succeed) → clear rune → `goto('/login')`.
 
 ### 5.3 Conversation list state
 
@@ -209,22 +217,40 @@ Typed discriminated union for events:
 type RunEvent =
   | { type: 'message.delta'; delta: string; message_id: string;
       sequence: number; run_id: string }
-  | { type: 'message.complete'; message: Message;
+  | { type: 'message.complete'; message: MessageOut;
+      sequence: number; run_id: string }
+  | { type: 'conversation.updated'; conversation_id: string; title: string;
       sequence: number; run_id: string }
   | { type: 'run.status'; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
       error?: { code: string; message: string };
       sequence: number; run_id: string };
+
+type MessageOut = {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: { text: string };
+  run_id: string | null;
+  created_at: string;
+  run_status: 'succeeded' | 'failed' | 'cancelled' | null;
+  run_error: { code: string; message: string } | null;
+};
 ```
 
 Per-run state machine: `idle → queued → streaming → done`. Driven by event arrivals.
 
 - Open EventSource on `/runs/<id>/events`.
 - `message.delta`: append `delta` to streaming bubble's text rune.
-- `message.complete`: replace streaming bubble backing object with `message` (server-authoritative IDs/timestamps).
-- `run.status={succeeded|failed|cancelled}`: close the stream, update header state; on `failed` propagate `error` to the bubble.
+- `message.complete` (success path only): replace streaming bubble backing object with `message` (server-authoritative IDs/timestamps). Run state → awaiting terminal.
+- `conversation.updated`: patch the sidebar store's title for that conversation. Only arrives on success paths after `message.complete`.
+- `run.status=succeeded`: close the stream.
+- `run.status=failed`: close the stream. No preceding `message.complete` — the streaming bubble (with whatever partial text was accumulated) is the terminal artifact. Convert it to a failed bubble carrying `error.code + message`. The backend has persisted this partial as an assistant message linked to the failed run, so a subsequent `GET /conversations/{id}` will return it with `run_status='failed'`.
+- `run.status=cancelled`: close the stream. Same "no message.complete" shape as failed. Convert streaming bubble to a cancelled bubble (no error). Partial text is persisted the same way.
 - `error` event (native EventSource): close stream, show "Disconnected — reload to retry" banner.
 - Unsubscribe on route change / component unmount.
 - No auto-reconnect in v1.
+
+**Terminal-without-complete contract.** The UI must NOT assume every terminal `run.status` is preceded by a `message.complete`. Only `succeeded` guarantees it. For `failed` and `cancelled` the streaming bubble is the source of truth until a reload hydrates the persisted version.
 
 ### 5.5 Markdown rendering (`lib/markdown.ts`)
 
@@ -248,10 +274,24 @@ On first page load after login, the CSRF cookie is already set (backend delivere
 | 403 on any fetch | Toast with envelope `message`; console warning. |
 | 500 / 502 / network | Inline banner on the affected view with manual retry button. No auto-retry. |
 | SSE `error` event | Stream closes; chat header banner: "Disconnected — reload to resume". |
-| SSE `run.status=failed` | Assistant bubble gets a red "Error" affordance with `error.code + message`. User can compose again. |
-| Cancel in-flight | Cancel button next to the streaming indicator → `POST /runs/<id>/cancel`. Bubble settles to partial text, labeled "Cancelled". |
-| OAuth callback failure | Login page reads `?auth_error=<code>` and shows a friendly message (e.g. `invalid_grant` → "Sign-in expired, please try again"). |
+| SSE `run.status=failed` | Assistant bubble gets a red "Failed" affordance with `error.code + message`. No preceding `message.complete` — the streaming bubble IS the terminal bubble. On reload, the backend surfaces the partial message with `run_status='failed'` and `run_error` populated. User can compose again. |
+| Cancel in-flight | Cancel button next to the streaming indicator → `POST /runs/<id>/cancel`. Bubble settles to partial text, labeled "Cancelled". Partial text is persisted server-side (same shape as failed); reload shows it with `run_status='cancelled'` and an amber badge. |
+| OAuth callback failure | Login page reads `?auth_error=<code>` and maps to a friendly message via the vocabulary below. Unknown codes fall back to a generic "Sign-in failed — please try again." |
 | Unhandled boundary | `+error.svelte` catches load-time failures; shows a reload-friendly shell. |
+
+**OAuth `auth_error` vocabulary.** Backend forwards the `error` field from Entra's token endpoint response verbatim, falling back to `token_exchange_failed` if the body isn't parseable JSON. The login page maps these to user-facing strings:
+
+| `auth_error=` | User-facing message |
+|---|---|
+| `invalid_grant` | "Sign-in expired. Please try again." |
+| `invalid_client` | "Backend is misconfigured (client credentials rejected). Contact the admin." |
+| `invalid_request` | "Sign-in request was malformed. Please try again." |
+| `unauthorized_client` | "This app isn't authorized to sign in. Contact the admin." |
+| `unsupported_grant_type` | "Backend is misconfigured. Contact the admin." |
+| `consent_required` | "Additional consent is needed. Contact the admin to approve the app for your account." |
+| `interaction_required` | "Please sign in again." |
+| `token_exchange_failed` (backend fallback) | "We couldn't complete sign-in. Please try again." |
+| *anything else* | "Sign-in failed — please try again." + log the raw code to console for debugging |
 
 ---
 
@@ -292,5 +332,5 @@ Not in scope for v1 but called out so the plan doesn't anticipate them:
 
 ## 9. Open questions
 
-- **How does the static bundle get into the API image in prod?** (docker COPY from a UI build stage? git submodule? CI artifact?) This is a plan/deploy concern; defer to the implementation plan.
 - **CSRF `path` on the CSRF cookie.** Backend sets `path="/"`. Not a question, just reminding the plan to verify during integration that the UI dev proxy doesn't strip it.
+- **Multi-stage Dockerfile or separate UI build + volume mount?** Both are compatible with the `UI_STATIC_DIR` contract (§2.4). Pick one in the implementation plan based on how CI is already structured.
