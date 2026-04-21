@@ -124,8 +124,16 @@ async def test_run_produces_streamed_assistant_message(
     # Must see message deltas.
     assert any(e["type"] == "message.delta" for e in events)
 
-    # Must see exactly one message.complete.
-    assert types.count("message.complete") == 1
+    # Must see exactly one message.complete carrying the full MessageOut shape.
+    complete_events = [e for e in events if e["type"] == "message.complete"]
+    assert len(complete_events) == 1
+    payload = complete_events[0]["message"]
+    assert payload["role"] == "assistant"
+    assert payload["conversation_id"] == str(conv.id)
+    assert payload["run_id"] == run_id
+    assert payload["id"]  # server-assigned UUID
+    assert payload["created_at"]  # server-assigned timestamp
+    assert "hello" in payload["content"]["text"].lower()
 
     # Assistant message must be persisted with the full streamed content.
     fresh_engine = create_async_engine(db_url, future=True)

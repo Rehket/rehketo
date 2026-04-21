@@ -15,8 +15,14 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-async def generate_title_if_needed(conversation_id: UUID) -> None:
-    """Best-effort async title generation. Failures are logged and swallowed."""
+async def generate_title_if_needed(conversation_id: UUID) -> str | None:
+    """Best-effort title generation. Failures are logged and swallowed.
+
+    Returns the newly-generated title on success, or None if no title was
+    written (conversation already had one, LLM returned empty, or an error
+    was swallowed). Callers use the return value to decide whether to
+    publish a conversation.updated event to the UI.
+    """
     try:
         async with sessionmaker()() as db:
             conv = (
@@ -25,7 +31,7 @@ async def generate_title_if_needed(conversation_id: UUID) -> None:
                 )
             ).scalar_one()
             if conv.title:
-                return
+                return None
             msgs = (
                 await db.execute(
                     select(Message)
@@ -35,7 +41,7 @@ async def generate_title_if_needed(conversation_id: UUID) -> None:
                 )
             ).scalars().all()
         if not msgs:
-            return
+            return None
 
         prompt = "Summarize this exchange in 4 words or less, plain text only:\n\n"
         for m in msgs:
@@ -52,7 +58,7 @@ async def generate_title_if_needed(conversation_id: UUID) -> None:
             (getattr(resp, "content", "") or "").strip().strip('"').strip(".")[:80]
         )
         if not title:
-            return
+            return None
 
         async with sessionmaker()() as db:
             await db.execute(
@@ -61,7 +67,9 @@ async def generate_title_if_needed(conversation_id: UUID) -> None:
                 .values(title=title)
             )
             await db.commit()
+        return title
     except Exception:  # broad catch intentional — swallow all failures
         logger.exception(
             "title generation failed for conversation %s", conversation_id
         )
+        return None

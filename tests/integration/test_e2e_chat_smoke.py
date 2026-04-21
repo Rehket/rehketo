@@ -1,8 +1,8 @@
 """Full E2E smoke test — login → create conversation → post message → SSE → detail.
 
 Uses a fake build_agent (same pattern as test_run_agent_end_to_end.py) so no
-Bifrost / LLM network calls are made.  The title generator fires as a
-background task but swallows its own failures, so we don't assert on title.
+Bifrost / LLM network calls are made. Title generation is also patched to a
+no-op so the test doesn't wait on a DNS failure to the mock Bifrost host.
 """
 from __future__ import annotations
 
@@ -31,6 +31,10 @@ async def _fake_build_agent(run_id: str) -> Any:
     yield _HiAgent()
 
 
+async def _no_title(_cid: Any) -> None:
+    return None
+
+
 async def test_full_chat_turn(
     settings_env: object, db_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -39,6 +43,7 @@ async def test_full_chat_turn(
     import rehketo.agent.run as run_mod
 
     monkeypatch.setattr(run_mod, "build_agent", _fake_build_agent)
+    monkeypatch.setattr(run_mod, "generate_title_if_needed", _no_title)
 
     app = create_app()
     async with AsyncClient(

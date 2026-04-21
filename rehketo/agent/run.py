@@ -108,22 +108,49 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                 .values(updated_at=datetime.now(UTC))
             )
             await db.commit()
+            # Re-read the persisted message so the wire shape matches the
+            # MessageOut that GET /conversations/{id} returns. The UI can
+            # then replace its streaming bubble with a server-authoritative
+            # object (same id, same created_at on reload).
+            persisted = (
+                await db.execute(
+                    select(Message).where(Message.id == assistant_id)
+                )
+            ).scalar_one()
+            message_payload: dict[str, object] = {
+                "id": str(persisted.id),
+                "conversation_id": str(persisted.conversation_id),
+                "role": persisted.role,
+                "content": persisted.content,
+                "run_id": str(persisted.run_id) if persisted.run_id else None,
+                "created_at": persisted.created_at.isoformat()
+                if persisted.created_at
+                else None,
+            }
 
         await bus.publish(
             str(run_id),
             {
                 "type": "message.complete",
-                "message": {
-                    "id": str(assistant_id),
-                    "role": "assistant",
-                    "content": {"text": assembled_text},
-                    "run_id": str(run_id),
-                },
+                "message": message_payload,
             },
         )
+
+        # Title generation runs synchronously so the UI can update the
+        # sidebar title before the run closes. Swallows its own errors and
+        # returns None if nothing changed.
+        new_title = await generate_title_if_needed(conversation_id)
+        if new_title is not None:
+            await bus.publish(
+                str(run_id),
+                {
+                    "type": "conversation.updated",
+                    "conversation_id": str(conversation_id),
+                    "title": new_title,
+                },
+            )
+
         await bus.publish(str(run_id), {"type": "run.status", "status": "succeeded"})
-        # Best-effort title generation. Fire and forget.
-        asyncio.create_task(generate_title_if_needed(conversation_id))  # noqa: RUF006
 
     except Exception as exc:
         # Broad catch is intentional: this is a top-level task handler that
