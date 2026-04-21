@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -74,6 +75,7 @@ async def post_message(
         status="queued",
         model=settings.agent_model,
     ))
+    conv.updated_at = datetime.now(UTC)
     await db.commit()
 
     bus = request.app.state.event_bus

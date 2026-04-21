@@ -13,7 +13,7 @@ from rehketo.agent.graph import build_agent
 from rehketo.agent.title import generate_title_if_needed
 from rehketo.core.logging import get_logger
 from rehketo.db import sessionmaker
-from rehketo.db.models import Message, Run
+from rehketo.db.models import Conversation, Message, Run
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,6 +101,11 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                     status="succeeded",
                     finished_at=datetime.now(UTC),
                 )
+            )
+            await db.execute(
+                update(Conversation)
+                .where(Conversation.id == conversation_id)
+                .values(updated_at=datetime.now(UTC))
             )
             await db.commit()
 

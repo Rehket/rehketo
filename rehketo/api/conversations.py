@@ -173,6 +173,7 @@ async def patch_conversation(
 
     if payload.title is not None:
         conv.title = payload.title
+        conv.updated_at = datetime.now(UTC)
     if payload.archived is True and conv.archived_at is None:
         conv.archived_at = datetime.now(UTC)
     if payload.archived is False:
