@@ -139,6 +139,20 @@
 
 	let isStreaming = $derived(activeRunId !== null);
 
+	async function cancelActiveRun(): Promise<void> {
+		const runId = activeRunId;
+		if (!runId) return;
+		try {
+			await apiFetch(`/runs/${runId}/cancel`, { method: 'POST' });
+		} catch (err) {
+			// 409 = run already terminal (it finished between click and POST).
+			// The SSE stream already dispatched the terminal event, so no UI
+			// action is needed — just swallow.
+			if (err instanceof ApiError && err.status === 409) return;
+			if (err instanceof ApiError) console.warn('cancel failed:', err.code, err.message);
+		}
+	}
+
 	onDestroy(() => {
 		subscription?.unsubscribe();
 		subscription = null;
@@ -155,6 +169,18 @@
 	{/if}
 
 	<MessageList {messages} {streamingText} {streamingStatus} />
+
+	{#if isStreaming && auth.can('chat.cancel_run')}
+		<div class="flex justify-center border-t border-border bg-bg/80 px-6 py-2">
+			<button
+				type="button"
+				onclick={cancelActiveRun}
+				class="rounded-md border border-border bg-surface px-3 py-1 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-danger"
+			>
+				Cancel
+			</button>
+		</div>
+	{/if}
 
 	<Composer {isStreaming} onSend={handleSend} />
 

@@ -3,6 +3,7 @@
 
 	import ConversationListItem from './ConversationListItem.svelte';
 	import NewChatButton from './NewChatButton.svelte';
+	import UserMenu from './UserMenu.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { conversations } from '$lib/stores/conversations.svelte';
 
@@ -33,5 +34,7 @@
 		{/if}
 	</nav>
 
-	<!-- UserMenu mounts here in T14 -->
+	<div class="mt-4 border-t border-border pt-3">
+		<UserMenu />
+	</div>
 </aside>
