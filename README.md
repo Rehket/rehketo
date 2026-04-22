@@ -1,42 +1,70 @@
-# sv
+# rehketo-ui
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit thin client for the [rehketo-api](../rehketo-api/) chat/agent backend. Static-adapter build, Workbench aesthetic, Svelte 5 runes, Tailwind 4.
 
-## Creating a project
+Design spec: [`../rehketo-api/docs/superpowers/specs/2026-04-20-svelte-ui-v1-design.md`](../rehketo-api/docs/superpowers/specs/2026-04-20-svelte-ui-v1-design.md). Contributor conventions: [`AGENTS.md`](AGENTS.md).
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Prerequisites
 
-```sh
-# create a new project
-npx sv create my-app
-```
+- **Node 22 LTS** and **pnpm ≥ 10** on the host.
+- **rehketo-api running on `:8000`**: `docker compose -f ../rehketo-api/deploy/docker-compose.yaml up -d postgres bifrost` + `uv run rehketo-serve` (see [rehketo-api's README](../rehketo-api/README.md)).
+- **Entra app registration** with `http://localhost:5173/auth/callback` as a redirect URI (dev). See rehketo-api's README for why the dev redirect lives on the UI origin rather than the backend's.
 
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.15.1 create --template minimal --types ts --add prettier eslint vitest="usages:unit" playwright tailwindcss="plugins:typography" sveltekit-adapter="adapter:static" --no-download-check --no-install D:/Workspace/rehketo/rehketo-ui
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Dev workflow
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+pnpm install
+pnpm dev
 ```
 
-## Building
+UI runs on `http://localhost:5173`. Vite proxies `/auth`, `/conversations`, `/runs`, `/me`, `/openapi.json`, `/docs`, `/healthz` to the backend at `127.0.0.1:8000`. The browser sees one origin, cookies flow, CSRF works.
 
-To create a production version of your app:
+**Dev startup order:** Postgres + Bifrost → backend (`uv run rehketo-serve`) → UI (`pnpm dev`) → open `http://localhost:5173/auth/login`. If you're not using Entra, `/auth/devonly/login` (when `DEVONLY_LOGIN_ENABLED=true` on the backend) issues a session cookie without leaving the stack.
+
+## Production smoke (same-origin via backend)
 
 ```sh
-npm run build
+pnpm build
+# rehketo-ui/build/ now has index.html + immutable assets.
+UI_STATIC_DIR="$PWD/build" uv run --project ../rehketo-api rehketo-serve
 ```
 
-You can preview the production build with `npm run preview`.
+Open `http://127.0.0.1:8000/` — backend serves the SvelteKit bundle; API routes still win at their prefixes (`/auth/*`, `/conversations/*`, `/runs/*`, `/me`, `/docs`, `/openapi.json`, `/healthz`); unknown paths fall back to `index.html` so client-side routes like `/c/<uuid>` survive a reload.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Tests
+
+```sh
+pnpm test:unit -- --run     # Vitest — api / sse / markdown
+pnpm test:e2e               # Playwright — critical paths (requires a running backend)
+pnpm check                  # svelte-check + tsc
+pnpm lint                   # prettier + eslint
+```
+
+Vitest runs in two projects:
+
+- `server` (node): `src/**/*.{test,spec}.{js,ts}` — pure logic (no DOM).
+- `dom` (jsdom): `src/**/*.dom.{test,spec}.{js,ts}` — anything needing `window` (e.g., DOMPurify).
+
+## Scripts
+
+| Script           | What it does                                   |
+| ---------------- | ---------------------------------------------- |
+| `pnpm dev`       | Vite dev server on :5173 with backend proxy.   |
+| `pnpm build`     | Static SvelteKit build into `build/`.          |
+| `pnpm preview`   | Serve the built bundle locally (no API proxy). |
+| `pnpm check`     | `svelte-check --tsconfig`.                     |
+| `pnpm lint`      | Prettier + ESLint.                             |
+| `pnpm format`    | Write Prettier fixes.                          |
+| `pnpm test:unit` | Vitest.                                        |
+| `pnpm test:e2e`  | Playwright.                                    |
+
+## Conventions
+
+- Conventional Commits. Types: `feat | fix | chore | docs | style | refactor | perf | test | build | ci | revert`.
+- Svelte 5 runes only — no Svelte-4 stores.
+- Hand-written types for the backend contract in `src/lib/types.ts`. No OpenAPI codegen in v1.
+- Capability-gated rendering (`auth.can('chat.write')`, etc.): gated affordances DO NOT RENDER when the bit is off — never disabled, never tooltip'd.
+- User messages are **never** markdown-rendered (spec §5.5).
+- SSE stream closes on `run.ended`, not on `run.status`.
+
+Full conventions in [AGENTS.md](AGENTS.md).
