@@ -1,7 +1,8 @@
 import { goto } from '$app/navigation';
 
-import { apiFetch, registerAuthExpiredHook } from '$lib/api';
+import { apiFetch, registerAuthExpiredHook, registerForbiddenHook } from '$lib/api';
 import { auth } from '$lib/stores/auth.svelte';
+import { toasts } from '$lib/stores/toasts.svelte';
 import { ApiError, type CapabilitiesOut, type MeOut } from '$lib/types';
 import type { LayoutLoad } from './$types';
 
@@ -25,6 +26,9 @@ function installAuthHook(url: URL): void {
 	registerAuthExpiredHook(() => {
 		auth.clear();
 		void goto(loginHrefFor(url), { replaceState: true });
+	});
+	registerForbiddenHook((err) => {
+		toasts.push({ variant: 'error', message: err.message });
 	});
 }
 

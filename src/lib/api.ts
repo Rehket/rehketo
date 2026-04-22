@@ -22,11 +22,19 @@ type ApiFetchInit = RequestInit & {
 };
 
 let onAuthExpiredHook: (() => void) | null = null;
+let onForbiddenHook: ((err: ApiError) => void) | null = null;
 
 /** Register the callback invoked on 401 (typically clears auth state and
  *  navigates to /login). Called once from the root layout. */
 export function registerAuthExpiredHook(fn: () => void): void {
 	onAuthExpiredHook = fn;
+}
+
+/** Register the callback invoked on 403 (typically pushes a toast).
+ *  Capability-gated UI should make 403s rare, but they can happen when
+ *  the server's capability view has drifted. */
+export function registerForbiddenHook(fn: (err: ApiError) => void): void {
+	onForbiddenHook = fn;
 }
 
 function getCookie(name: string): string | null {
@@ -103,5 +111,10 @@ export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promis
 	}
 
 	const env = await parseErrorEnvelope(res);
-	throw new ApiError({ code: env.code, message: env.message, status: res.status });
+	const err = new ApiError({ code: env.code, message: env.message, status: res.status });
+	if (res.status === 403) {
+		onForbiddenHook?.(err);
+		console.warn('403 on', resolveUrl(path), '—', env.code, env.message);
+	}
+	throw err;
 }
