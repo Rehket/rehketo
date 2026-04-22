@@ -37,8 +37,13 @@ export default defineConfig(
 		}
 	},
 	{
-		// Override or add rule settings here, such as:
-		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			// The backend lives at /auth, /conversations, /runs, /me, etc.
+			// These are same-origin routes (Vite proxy in dev, StaticFiles
+			// mount in prod) but are NOT SvelteKit-managed — resolve()
+			// only knows the UI's own route table. Turn off the rule so
+			// backend hrefs and goto()s don't require ceremony.
+			'svelte/no-navigation-without-resolve': 'off'
+		}
 	}
 );
