@@ -1,0 +1,145 @@
+"""OAuth `next=` preservation across the Entra round-trip.
+
+The UI redirects signed-out users to `/login?next=<current path>`, the login
+page appends `?next=...` to `/auth/login`, and the callback must honor it.
+Without this round-trip, any signed-in user always lands on the default
+post-login URL — the "Chrome took me to the wrong page initially" bug.
+"""
+from __future__ import annotations
+
+import base64
+import json
+
+import pytest
+import respx
+from httpx import ASGITransport, AsyncClient
+
+from rehketo.auth.entra import authority
+from rehketo.main import create_app
+
+
+def _fake_id_token() -> str:
+    header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
+    payload = base64.urlsafe_b64encode(
+        json.dumps(
+            {"sub": "sub-n", "oid": "oid-n", "email": "n@example.com", "name": "N"}
+        ).encode()
+    ).rstrip(b"=").decode()
+    return f"{header}.{payload}."
+
+
+def _token_response() -> dict[str, object]:
+    return {
+        "access_token": "at",
+        "refresh_token": "rt",
+        "id_token": _fake_id_token(),
+        "token_type": "Bearer",
+        "expires_in": 3600,
+    }
+
+
+@pytest.mark.asyncio
+async def test_login_sets_next_cookie_for_safe_path(
+    settings_env: pytest.MonkeyPatch, db_url: str
+) -> None:
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://t",
+        follow_redirects=False,
+    ) as c:
+        r = await c.get("/auth/login", params={"next": "/c/abc-123"})
+    assert r.status_code == 302
+    # Starlette emits cookie values with slashes inside DQUOTEs per RFC
+    # 6265; browsers strip the quotes on round-trip and Starlette's own
+    # Cookie() dep does the same when parsing — so the callback receives
+    # the clean value. The round-trip test below covers the full path.
+    assert (r.cookies.get("rehketo_oauth_next") or "").strip('"') == "/c/abc-123"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "//evil.example.com/x",
+        "http://evil.example.com/",
+        "/\\evil",
+        "no-leading-slash",
+        "",
+    ],
+)
+async def test_login_ignores_unsafe_next(
+    settings_env: pytest.MonkeyPatch, db_url: str, unsafe: str
+) -> None:
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://t",
+        follow_redirects=False,
+    ) as c:
+        r = await c.get("/auth/login", params={"next": unsafe})
+    assert r.status_code == 302
+    set_cookie = r.headers.get("set-cookie", "")
+    assert "rehketo_oauth_next=" not in set_cookie
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_callback_uses_next_cookie_when_safe(
+    settings_env: pytest.MonkeyPatch, db_url: str
+) -> None:
+    token_url = f"{authority()}/oauth2/v2.0/token"
+    respx.post(token_url).mock(
+        return_value=respx.MockResponse(200, json=_token_response())
+    )
+
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://t",
+        follow_redirects=False,
+    ) as c:
+        r = await c.get(
+            "/auth/callback",
+            params={"code": "abc", "state": "s1"},
+            cookies={
+                "rehketo_oauth_state": "s1",
+                "rehketo_oauth_verifier": "v1",
+                "rehketo_oauth_next": "/c/deep-link",
+            },
+        )
+    assert r.status_code == 302
+    assert r.headers["location"] == "http://127.0.0.1:5173/c/deep-link"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_callback_rejects_protocol_relative_next_cookie(
+    settings_env: pytest.MonkeyPatch, db_url: str
+) -> None:
+    # Defense in depth: even if an attacker somehow plants an unsafe value
+    # in the next cookie directly, the callback must refuse it and fall
+    # back to the configured post-login URL.
+    token_url = f"{authority()}/oauth2/v2.0/token"
+    respx.post(token_url).mock(
+        return_value=respx.MockResponse(200, json=_token_response())
+    )
+
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://t",
+        follow_redirects=False,
+    ) as c:
+        r = await c.get(
+            "/auth/callback",
+            params={"code": "abc", "state": "s1"},
+            cookies={
+                "rehketo_oauth_state": "s1",
+                "rehketo_oauth_verifier": "v1",
+                "rehketo_oauth_next": "//evil.example.com/pwn",
+            },
+        )
+    assert r.status_code == 302
+    assert r.headers["location"].startswith("http://127.0.0.1:5173/")
+    assert "evil.example.com" not in r.headers["location"]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import quote, urljoin, urlparse, urlunparse
 from uuid import UUID, uuid4
 
 import httpx
@@ -35,6 +35,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 OAUTH_STATE_COOKIE = "rehketo_oauth_state"
 OAUTH_VERIFIER_COOKIE = "rehketo_oauth_verifier"
+OAUTH_NEXT_COOKIE = "rehketo_oauth_next"
 
 
 def _set_oauth_cookie(
@@ -51,8 +52,38 @@ def _set_oauth_cookie(
     )
 
 
+def _ui_origin() -> str:
+    """Origin (scheme://host[:port]) of the UI, derived from ui_post_login_url."""
+    parsed = urlparse(get_settings().ui_post_login_url)
+    return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
+
+
+def _resolve_post_login_target(next_path: str | None) -> str:
+    """Return an absolute URL on the UI origin.
+
+    `next_path` is trusted only when it is a relative path starting with a
+    single `/` — never a protocol-relative `//evil.com/...` or full URL.
+    Falls back to the configured `ui_post_login_url` on anything suspicious.
+    """
+    if next_path and _is_safe_next(next_path):
+        return urljoin(_ui_origin() + "/", next_path.lstrip("/"))
+    return get_settings().ui_post_login_url
+
+
+def _is_safe_next(next_path: str) -> bool:
+    if not next_path.startswith("/"):
+        return False
+    # Protocol-relative URLs (//evil.com), backslash trick, and control chars
+    # can all turn a "next=/x" into off-origin navigation. Reject them.
+    if next_path.startswith(("//", "/\\")):
+        return False
+    return all(ord(c) >= 0x20 for c in next_path)
+
+
 @router.get("/login")
-async def login() -> RedirectResponse:
+async def login(
+    next: Annotated[str | None, Query()] = None,
+) -> RedirectResponse:
     s = get_settings()
     start = entra.build_login()
     resp = RedirectResponse(start.authorize_url, status_code=302)
@@ -60,6 +91,12 @@ async def login() -> RedirectResponse:
     _set_oauth_cookie(
         resp, OAUTH_VERIFIER_COOKIE, start.code_verifier, secure=s.cookie_secure
     )
+    # Carry the caller's intended post-login path through the OAuth round
+    # trip via a short-lived cookie. State-cookie-only preserves the flow
+    # across the Entra hop without putting the path into the OAuth `state`
+    # (which would leak it to the IdP logs).
+    if next is not None and _is_safe_next(next):
+        _set_oauth_cookie(resp, OAUTH_NEXT_COOKIE, next, secure=s.cookie_secure)
     return resp
 
 
@@ -82,6 +119,7 @@ def _oauth_error_redirect(exc: httpx.HTTPStatusError) -> RedirectResponse:
     resp = RedirectResponse(target, status_code=302)
     resp.delete_cookie(OAUTH_STATE_COOKIE, path="/auth/")
     resp.delete_cookie(OAUTH_VERIFIER_COOKIE, path="/auth/")
+    resp.delete_cookie(OAUTH_NEXT_COOKIE, path="/auth/")
     return resp
 
 
@@ -134,6 +172,9 @@ async def callback(
     rehketo_oauth_verifier: Annotated[
         str | None, Cookie(alias=OAUTH_VERIFIER_COOKIE)
     ] = None,
+    rehketo_oauth_next: Annotated[
+        str | None, Cookie(alias=OAUTH_NEXT_COOKIE)
+    ] = None,
 ) -> Response:
     if not rehketo_oauth_state or not rehketo_oauth_verifier:
         raise HTTPException(status_code=400, detail="missing oauth transient state")
@@ -165,7 +206,9 @@ async def callback(
         ttl_minutes=s.session_ttl_minutes,
     )
 
-    resp = RedirectResponse(s.ui_post_login_url, status_code=302)
+    resp = RedirectResponse(
+        _resolve_post_login_target(rehketo_oauth_next), status_code=302
+    )
     ttl_seconds = s.session_ttl_minutes * 60
     set_session_cookie(resp, str(session_id), max_age_seconds=ttl_seconds)
     set_csrf_cookie(
@@ -174,6 +217,7 @@ async def callback(
     # Clear the transient OAuth cookies (must match path="/auth/" set at login)
     resp.delete_cookie(OAUTH_STATE_COOKIE, path="/auth/")
     resp.delete_cookie(OAUTH_VERIFIER_COOKIE, path="/auth/")
+    resp.delete_cookie(OAUTH_NEXT_COOKIE, path="/auth/")
     return resp
 
 
