@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { subscribeRun, type RunStreamHandlers } from './sse';
 import type { MessageOut, RunEvent } from './types';
 
-// Minimal EventSource mock — fires a scripted sequence of `message`
-// events (and optionally an `error`) that subscribeRun consumes.
+// EventSource mock that matches browser dispatch semantics: SSE frames
+// with `event: <name>` dispatch as custom events of that name — NOT as
+// generic `message` events. The real backend emits `event: message.delta`,
+// `event: run.ended`, etc., so tests must too, or we'd mask a class of
+// bug where the client listens for the wrong event type.
 class MockEventSource {
 	static instances: MockEventSource[] = [];
 	readonly url: string;
 	closed = false;
-	private messageListeners: ((e: MessageEvent<string>) => void)[] = [];
-	private errorListeners: ((e: Event) => void)[] = [];
+	private listeners: Record<string, ((e: Event) => void)[]> = {};
 
 	constructor(url: string) {
 		this.url = url;
@@ -18,8 +20,7 @@ class MockEventSource {
 	}
 
 	addEventListener(name: string, fn: (e: Event) => void): void {
-		if (name === 'message') this.messageListeners.push(fn as (e: MessageEvent<string>) => void);
-		else if (name === 'error') this.errorListeners.push(fn);
+		(this.listeners[name] ??= []).push(fn);
 	}
 
 	close(): void {
@@ -27,12 +28,17 @@ class MockEventSource {
 	}
 
 	emitEvent(event: RunEvent): void {
-		const e = new MessageEvent('message', { data: JSON.stringify(event) });
-		for (const fn of this.messageListeners) fn(e);
+		const me = new MessageEvent(event.type, { data: JSON.stringify(event) });
+		for (const fn of this.listeners[event.type] ?? []) fn(me);
+	}
+
+	emitRaw(eventType: string, data: string): void {
+		const me = new MessageEvent(eventType, { data });
+		for (const fn of this.listeners[eventType] ?? []) fn(me);
 	}
 
 	emitError(): void {
-		for (const fn of this.errorListeners) fn(new Event('error'));
+		for (const fn of this.listeners.error ?? []) fn(new Event('error'));
 	}
 }
 
@@ -197,7 +203,7 @@ describe('subscribeRun', () => {
 		expect(src.closed).toBe(true);
 	});
 
-	test('native EventSource error closes stream and reports', () => {
+	test('native EventSource error mid-run closes stream and reports', () => {
 		const c = collectHandlers();
 		const sub = subscribeRun('run-x', c.handlers, {
 			EventSourceImpl: MockEventSource as unknown as typeof EventSource
@@ -210,6 +216,34 @@ describe('subscribeRun', () => {
 		expect(sub.state).toBe('closed');
 	});
 
+	test('error after terminal status is treated as normal EOF — no onError', () => {
+		// Browsers fire `error` whenever the server closes the HTTP stream,
+		// including the normal EOF after run.ended. When we've already seen
+		// a terminal run.status, suppress the disconnect signal.
+		const onError = vi.fn();
+		const onEnded = vi.fn();
+		subscribeRun(
+			'run-tail',
+			{ onError, onEnded },
+			{ EventSourceImpl: MockEventSource as unknown as typeof EventSource }
+		);
+		const src = MockEventSource.instances[0]!;
+
+		src.emitEvent({
+			type: 'run.status',
+			status: 'failed',
+			error: { code: 'llm_failure', message: 'overloaded' },
+			sequence: 1,
+			run_id: 'run-tail'
+		});
+		// Server closes the connection without sending run.ended first, OR
+		// the native error fires racing against our run.ended handler.
+		src.emitError();
+
+		expect(onError).not.toHaveBeenCalled();
+		expect(onEnded).toHaveBeenCalledTimes(1);
+	});
+
 	test('malformed JSON payload reports via onError, stream stays open', () => {
 		const onError = vi.fn();
 		const sub = subscribeRun(
@@ -219,11 +253,7 @@ describe('subscribeRun', () => {
 		);
 		const src = MockEventSource.instances[0]!;
 
-		// Fire a direct message with invalid JSON.
-		const listeners = (
-			src as unknown as { messageListeners: ((e: MessageEvent<string>) => void)[] }
-		).messageListeners;
-		listeners[0]?.(new MessageEvent('message', { data: 'not-json' }));
+		src.emitRaw('message.delta', 'not-json');
 
 		expect(onError).toHaveBeenCalledTimes(1);
 		expect(src.closed).toBe(false);

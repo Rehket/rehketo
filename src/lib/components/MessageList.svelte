@@ -24,6 +24,12 @@
 	});
 
 	let showStreamingBubble = $derived(streamingText !== null);
+	// "Streaming" means deltas are still flowing — i.e. the run hasn't
+	// reached a terminal status yet. Guards the O(n²) markdown render
+	// during streaming (we show plain text instead) and the pulsing dot.
+	let isActivelyStreaming = $derived(
+		streamingStatus === null || streamingStatus === 'queued' || streamingStatus === 'running'
+	);
 </script>
 
 <div bind:this={container} class="flex-1 overflow-y-auto px-6 py-4">
@@ -35,7 +41,7 @@
 		{/each}
 		{#if showStreamingBubble}
 			<li>
-				<AssistantBubble text={streamingText ?? ''} streaming={streamingStatus === null} />
+				<AssistantBubble text={streamingText ?? ''} streaming={isActivelyStreaming} />
 			</li>
 		{/if}
 	</ul>

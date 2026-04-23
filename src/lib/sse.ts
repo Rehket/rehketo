@@ -6,6 +6,12 @@
 // - failure: message.delta* → run.status=failed → run.ended
 // - cancel:  message.delta* → run.status=cancelled → run.ended
 //
+// The backend emits SSE frames with an `event:` field set to the event
+// type (e.g. `event: message.delta`). Browsers dispatch those as custom
+// DOM events of that name — NOT as generic `message` events — so we must
+// addEventListener for each type. A single `addEventListener('message', …)`
+// would miss every frame.
+//
 // The stream closes on `run.ended` only. run.status alone is a state
 // signal, not a terminator — closing on succeeded would drop the
 // subsequent conversation.updated.
@@ -41,6 +47,14 @@ export type RunStreamSubscription = {
 // Factory takes an EventSource constructor so tests can inject a mock.
 type EventSourceCtor = new (url: string, init?: EventSourceInit) => EventSource;
 
+type TerminalState = 'terminalSucceeded' | 'terminalFailed' | 'terminalCancelled';
+
+function isTerminal(state: StreamState): state is TerminalState {
+	return (
+		state === 'terminalSucceeded' || state === 'terminalFailed' || state === 'terminalCancelled'
+	);
+}
+
 export function subscribeRun(
 	runId: string,
 	handlers: RunStreamHandlers,
@@ -57,60 +71,77 @@ export function subscribeRun(
 	const source = new Ctor(url, { withCredentials: true });
 
 	const sub: { state: StreamState } = { state: 'idle' };
+	let closed = false;
 
 	function close(final: StreamState): void {
+		if (closed) return;
+		closed = true;
 		sub.state = final;
 		source.close();
 		handlers.onEnded?.();
 	}
 
-	source.addEventListener('message', (evt: MessageEvent<string>) => {
-		let event: RunEvent;
+	function parseOrError<E extends RunEvent>(evt: Event): E | null {
+		const data = (evt as MessageEvent<string>).data;
 		try {
-			event = JSON.parse(evt.data) as RunEvent;
+			return JSON.parse(data) as E;
 		} catch (err) {
 			handlers.onError?.(err);
-			return;
+			return null;
 		}
+	}
 
-		switch (event.type) {
-			case 'message.delta':
-				if (sub.state === 'idle' || sub.state === 'queued') sub.state = 'running';
-				handlers.onDelta?.(event.delta, event);
-				break;
-			case 'message.complete':
-				handlers.onMessageComplete?.(event.message);
-				break;
-			case 'conversation.updated':
-				handlers.onConversationUpdated?.(event.conversation_id, event.title);
-				break;
-			case 'run.status':
-				handlers.onStatus?.(event.status, event.error);
-				if (event.status === 'queued') {
-					if (sub.state === 'idle') sub.state = 'queued';
-				} else if (event.status === 'running') {
-					sub.state = 'running';
-				} else if (event.status === 'succeeded') {
-					sub.state = 'terminalSucceeded';
-				} else if (event.status === 'failed') {
-					sub.state = 'terminalFailed';
-				} else if (event.status === 'cancelled') {
-					sub.state = 'terminalCancelled';
-				}
-				break;
-			case 'run.ended':
-				close(
-					sub.state === 'idle' || sub.state === 'queued' || sub.state === 'running'
-						? 'closed'
-						: sub.state
-				);
-				break;
+	source.addEventListener('message.delta', (evt) => {
+		const event = parseOrError<Extract<RunEvent, { type: 'message.delta' }>>(evt);
+		if (!event) return;
+		if (sub.state === 'idle' || sub.state === 'queued') sub.state = 'running';
+		handlers.onDelta?.(event.delta, event);
+	});
+
+	source.addEventListener('message.complete', (evt) => {
+		const event = parseOrError<Extract<RunEvent, { type: 'message.complete' }>>(evt);
+		if (!event) return;
+		handlers.onMessageComplete?.(event.message);
+	});
+
+	source.addEventListener('conversation.updated', (evt) => {
+		const event = parseOrError<Extract<RunEvent, { type: 'conversation.updated' }>>(evt);
+		if (!event) return;
+		handlers.onConversationUpdated?.(event.conversation_id, event.title);
+	});
+
+	source.addEventListener('run.status', (evt) => {
+		const event = parseOrError<Extract<RunEvent, { type: 'run.status' }>>(evt);
+		if (!event) return;
+		handlers.onStatus?.(event.status, event.error);
+		if (event.status === 'queued') {
+			if (sub.state === 'idle') sub.state = 'queued';
+		} else if (event.status === 'running') {
+			sub.state = 'running';
+		} else if (event.status === 'succeeded') {
+			sub.state = 'terminalSucceeded';
+		} else if (event.status === 'failed') {
+			sub.state = 'terminalFailed';
+		} else if (event.status === 'cancelled') {
+			sub.state = 'terminalCancelled';
 		}
 	});
 
+	source.addEventListener('run.ended', () => {
+		close(isTerminal(sub.state) ? sub.state : 'closed');
+	});
+
 	source.addEventListener('error', (err) => {
-		// Browsers dispatch an error for transient reconnects too; we don't
-		// auto-reconnect in v1 (spec §8). Always close and surface.
+		// Browsers dispatch an error when the server closes the HTTP stream
+		// or the connection drops. If we've already received a terminal
+		// run.status, this is the normal EOF tail — treat it as run.ended
+		// (close quietly, no disconnect banner). Only surface onError when
+		// the stream genuinely broke mid-run.
+		if (closed) return;
+		if (isTerminal(sub.state)) {
+			close(sub.state);
+			return;
+		}
 		handlers.onError?.(err);
 		close('closed');
 	});
@@ -120,6 +151,8 @@ export function subscribeRun(
 			return sub.state;
 		},
 		unsubscribe(): void {
+			if (closed) return;
+			closed = true;
 			source.close();
 		}
 	};
