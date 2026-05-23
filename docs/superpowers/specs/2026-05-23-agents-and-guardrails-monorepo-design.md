@@ -166,7 +166,7 @@ rule, and `agent_guards check` invokes it when present. Final check set:
 | `check-permission-resource-id` | `.require(...)` / `.can(...)` calls pass `resource_id=` (the OpenFGA migration contract). |
 | `check-getenv-outside-config` | `os.getenv` / `os.environ` only in `rehketo/config.py`. |
 | `check-logger-names` | `get_logger(__name__)` only — never a string literal. |
-| `check-escape-hatches` | `# type: ignore` / `# noqa` / `# pragma: no cover` require an inline `— reason`. |
+| `check-escape-hatches` | Bans *blanket* suppressions: `# type: ignore` and `# noqa` must carry a specific code (e.g. `# type: ignore[arg-type]`, `# noqa: TC002`); `# pragma: no cover` must carry a prose reason. (Adapted from slipstream's prose-reason rule to fit this codebase's existing coded suppressions — zero retroactive churn; the 13 current code-only ignores already pass.) |
 
 **Commit hygiene:**
 
@@ -237,7 +237,9 @@ since tools read hierarchically).
   case. Only the *seams* and the *direction* are documented.
 - `check-contract` is **not** a structural type-equivalence check.
 - The SSE-close invariant ("don't close on `run.status` alone; wait for `run.ended`") is enforced
-  by a **dedicated test + comment**, not a guard (too fragile to detect statically).
+  by a **test**, not a guard (too fragile to detect statically). This coverage **already exists** in
+  `rehketo-ui/src/lib/sse.spec.ts` (asserts `src.closed === false` after `run.status=succeeded`), so
+  no new test is required — the plan only verifies it.
 - **Cut** for now: `check-skip-todo-tickets` (no issue tracker referenced yet — revisit when one is
   adopted) and `check-actions-naming` (low value over existing tooling).
 - No renaming of `rehketo-api/` / `rehketo-ui/` (avoids rewriting cross-references).
@@ -264,4 +266,5 @@ since tools read hierarchically).
 8. `tools/sync_agent_rules.py` + the three generated mirrors.
 9. One root `.pre-commit-config.yaml` (path-scoped) — stale header removed.
 10. One root `.github/workflows/ci.yml` + merged `dependabot.yml`.
-11. SSE-close regression test in `rehketo-ui`.
+11. Verify the existing SSE-close coverage in `rehketo-ui/src/lib/sse.spec.ts` (already present;
+    no new test needed).
