@@ -50,6 +50,121 @@ def _parse(path: Path) -> ast.Module:
 FILE_CHECKS: dict[str, Callable[[], list[Violation]]] = {}
 
 
+# --- escape hatches: suppressions must not be blanket -----------------------
+
+_TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore(?P<code>\s*\[[^\]]*\])?(?P<rest>.*)$")
+_NOQA = re.compile(r"#\s*noqa(?P<code>:\s*[A-Za-z0-9]+(?:\s*,\s*[A-Za-z0-9]+)*)?")
+_PRAGMA = re.compile(r"#\s*pragma:\s*no cover(?P<rest>.*)$")
+
+
+def _check_escape_hatches_text(path: Path, text: str) -> list[Violation]:
+    out: list[Violation] = []
+    for i, line in enumerate(text.splitlines(), 1):
+        m = _TYPE_IGNORE.search(line)
+        if m and not m.group("code"):
+            out.append(Violation(path, i, "blanket '# type: ignore' — add a code, e.g. [arg-type]"))
+        m = _NOQA.search(line)
+        if m and not m.group("code"):
+            out.append(Violation(path, i, "blanket '# noqa' — add a code, e.g. : F401"))
+        m = _PRAGMA.search(line)
+        if m and not m.group("rest").strip():
+            out.append(Violation(path, i, "'# pragma: no cover' needs a reason comment"))
+    return out
+
+
+def check_escape_hatches() -> list[Violation]:
+    out: list[Violation] = []
+    for path in _py_files(API_SRC):
+        out.extend(_check_escape_hatches_text(path, path.read_text(encoding="utf-8")))
+    return out
+
+
+FILE_CHECKS["check-escape-hatches"] = check_escape_hatches
+
+
+# --- logger names: get_logger(__name__) only --------------------------------
+
+
+def _check_logger_names_tree(path: Path, tree: ast.Module) -> list[Violation]:
+    out: list[Violation] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "getLogger":
+            if path != LOGGING_PY:
+                out.append(Violation(path, node.lineno,
+                    "use rehketo.core.logging.get_logger, not logging.getLogger"))
+        elif isinstance(func, ast.Name) and func.id == "get_logger":
+            first = node.args[0] if node.args else None
+            if not (isinstance(first, ast.Name) and first.id == "__name__"):
+                out.append(Violation(path, node.lineno, "call get_logger(__name__), not a literal"))
+    return out
+
+
+def check_logger_names() -> list[Violation]:
+    out: list[Violation] = []
+    for path in _py_files(API_SRC):
+        out.extend(_check_logger_names_tree(path, _parse(path)))
+    return out
+
+
+FILE_CHECKS["check-logger-names"] = check_logger_names
+
+
+# --- env access: only via rehketo.config ------------------------------------
+
+
+def _check_getenv_tree(path: Path, tree: ast.Module) -> list[Violation]:
+    if path == CONFIG_PY:
+        return []
+    out: list[Violation] = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                and node.value.id == "os" and node.attr in {"getenv", "environ"}):
+            out.append(Violation(path, node.lineno,
+                f"read settings via rehketo.config.Settings, not os.{node.attr} outside config.py"))
+    return out
+
+
+def check_getenv_outside_config() -> list[Violation]:
+    out: list[Violation] = []
+    for path in _py_files(API_SRC):
+        out.extend(_check_getenv_tree(path, _parse(path)))
+    return out
+
+
+FILE_CHECKS["check-getenv-outside-config"] = check_getenv_outside_config
+
+
+# --- single permission gate -------------------------------------------------
+
+
+def _check_permission_gate_tree(path: Path, tree: ast.Module) -> list[Violation]:
+    if PERMISSIONS_DIR in path.parents:
+        return []
+    out: list[Violation] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "ROLE_PERMISSIONS":
+            out.append(Violation(path, node.lineno,
+                "ROLE_PERMISSIONS is internal to rehketo.permissions; gate via ResolvedPermissions"))
+        elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+              and node.func.id == "check_permission"):
+            out.append(Violation(path, node.lineno,
+                "call ResolvedPermissions.can/require, not check_permission directly"))
+    return out
+
+
+def check_single_permission_gate() -> list[Violation]:
+    out: list[Violation] = []
+    for path in _py_files(API_SRC):
+        out.extend(_check_permission_gate_tree(path, _parse(path)))
+    return out
+
+
+FILE_CHECKS["check-single-permission-gate"] = check_single_permission_gate
+
+
 def _run(checks: Iterable[Callable[[], list[Violation]]]) -> int:
     violations: list[Violation] = []
     for fn in checks:
