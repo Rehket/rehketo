@@ -1,0 +1,33 @@
+[importlinter]
+root_package = rehketo
+
+[importlinter:contract:auth-permissions-never-import-api]
+name = auth and permissions never depend on api
+type = forbidden
+source_modules =
+    rehketo.auth
+    rehketo.permissions
+forbidden_modules =
+    rehketo.api
+
+[importlinter:contract:db-isolated]
+name = db does not depend on app layers
+type = forbidden
+source_modules =
+    rehketo.db
+forbidden_modules =
+    rehketo.api
+    rehketo.auth
+    rehketo.permissions
+
+[importlinter:contract:core-foundational]
+name = core is foundational
+type = forbidden
+source_modules =
+    rehketo.core
+forbidden_modules =
+    rehketo.api
+    rehketo.auth
+    rehketo.permissions
+    rehketo.db
+    rehketo.config
