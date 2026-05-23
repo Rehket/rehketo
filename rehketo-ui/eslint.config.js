@@ -45,5 +45,45 @@ export default defineConfig(
 			// backend hrefs and goto()s don't require ceremony.
 			'svelte/no-navigation-without-resolve': 'off'
 		}
+	},
+	{
+		// Invariant: all data access goes through apiFetch (CSRF, 401/403,
+		// envelope). Raw fetch is allowed ONLY in src/lib/api.ts.
+		files: ['**/*.ts', '**/*.svelte', '**/*.svelte.ts'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: "CallExpression[callee.name='fetch']",
+					message: 'Use apiFetch from $lib/api — raw fetch is only allowed in src/lib/api.ts.'
+				},
+				{
+					selector: "CallExpression[callee.property.name='fetch']",
+					message: 'Use apiFetch from $lib/api — raw fetch is only allowed in src/lib/api.ts.'
+				}
+			]
+		}
+	},
+	{
+		files: ['src/lib/api.ts'],
+		rules: { 'no-restricted-syntax': 'off' }
+	},
+	{
+		// Invariant (spec §5.5): user-authored text is NEVER markdown-rendered.
+		// UserBubble renders plain text only.
+		files: ['src/lib/components/UserBubble.svelte'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['**/MarkdownView.svelte', '**/markdown', '$lib/markdown'],
+							message: 'User text must never be markdown-rendered (spec §5.5).'
+						}
+					]
+				}
+			]
+		}
 	}
 );
