@@ -1,10 +1,9 @@
-# --- TEMPORARY: pending the git-subtree migration ---
-# rehketo-api/ and rehketo-ui/ are still independent git repos at this point.
-# They get merged into this monorepo (preserving history) via `git subtree`
-# during the migration. Until then, exclude them so commits don't capture them
-# as embedded gitlinks. Remove these two entries as the first step of the merge.
-/rehketo-api/
-/rehketo-ui/
-
 # Editor
 /.idea/
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
