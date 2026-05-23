@@ -66,3 +66,17 @@ def test_permission_resource_id():
     assert [x.line for x in v] == [1]
     ok = "perms.require('a', resource_type='conversation', resource_id=None)\n"
     assert g._check_resource_id_tree(g.API_SRC / "api" / "foo.py", _ast.parse(ok)) == []
+
+
+def test_no_ai_attribution(tmp_path):
+    good = tmp_path / "good.txt"
+    good.write_text("feat: do a thing\n\nReal body.\n")
+    assert g.check_no_ai_attribution(good) == []
+
+    bad = tmp_path / "bad.txt"
+    bad.write_text("feat: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n")
+    assert len(g.check_no_ai_attribution(bad)) == 1
+
+    gen = tmp_path / "gen.txt"
+    gen.write_text("fix: y\n\n\U0001f916 Generated with Claude Code\n")
+    assert len(g.check_no_ai_attribution(gen)) == 1

@@ -223,9 +223,26 @@ def main(argv: list[str] | None = None) -> int:
     return _run([FILE_CHECKS[args.cmd]])
 
 
-# commit-msg check lives here so it is importable before its task; see Task 2.7.
+# commit-msg check: stealth mode — no AI attribution trailers.
+_AI_TRAILER = re.compile(
+    r"(?i)(?:"
+    r"co-authored-by:\s*.*(?:claude|anthropic|openai|gpt|copilot|cursor)"
+    r"|generated\s+with\s+.*claude"
+    r"|\U0001f916\s*generated)"
+)
+
+
 def check_no_ai_attribution(msg_path: Path) -> list[Violation]:
-    return []
+    out: list[Violation] = []
+    for i, line in enumerate(msg_path.read_text(encoding="utf-8").splitlines(), 1):
+        if line.startswith("# ------------------------ >8"):
+            break  # git's verbose-commit scissors; everything below is a diff
+        if line.lstrip().startswith("#"):
+            continue  # comment lines aren't part of the message
+        if _AI_TRAILER.search(line):
+            out.append(Violation(msg_path, i,
+                "stealth mode: remove AI attribution / Co-Authored-By trailer"))
+    return out
 
 
 if __name__ == "__main__":
