@@ -1,0 +1,50 @@
+# Pre-commit hooks for apex-search-service
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+# See https://pre-commit.com and https://docs.astral.sh/uv/guides/integration/pre-commit/
+
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: 4394e2e7ab54549ad3f61cd32ae044710f885d12  # v4.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - feat
+          - fix
+          - chore
+          - docs
+          - style
+          - refactor
+          - perf
+          - test
+          - build
+          - ci
+          - revert
+
+  - repo: local
+    hooks:
+      - id: uv-sync
+        name: uv-sync
+        entry: uv sync --locked --all-packages
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: ruff
+        name: ruff
+        entry: uv run ruff check
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: uv run mypy rehketo
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: bandit
+        name: bandit
+        entry: uv run bandit -r rehketo
+        language: system
+        pass_filenames: false
+        types: [python]

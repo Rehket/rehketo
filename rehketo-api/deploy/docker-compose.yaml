@@ -1,0 +1,76 @@
+name: rehketo
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rehketo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rehketo}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "rehketo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  bifrost:
+    image: maximhq/bifrost:latest
+    ports: ["8088:8080"]
+    environment:
+      # config_store + logs_store expand from these names inside ./bifrost_data/config.json
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_USER: ${POSTGRES_USER:-rehketo}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-rehketo}
+      PG_DB: bifrost
+      PG_SSL_MODE: disable
+      # Key used to encrypt stored provider API keys. Must stay stable across
+      # container restarts — rotating it strands previously saved keys.
+      BIFROST_ENCRYPTION_KEY: ${BIFROST_ENCRYPTION_KEY}
+    volumes:
+      # Bifrost writes config + state to /app/data (config.json, keys, logs).
+      # Providers and model aliases are managed through the Bifrost UI at
+      # http://localhost:8088 — do NOT bake them into a mounted file.
+      - ./bifrost_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Prod-like runner for the API. Local dev typically skips this and uses
+  # `uv run rehketo-serve` on the host for hot reload. Bring up with
+  # `docker compose up rehketo-api` when you want a container-built run.
+  rehketo-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: rehketo-api:local
+    ports: ["8000:8000"]
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rehketo}:${POSTGRES_PASSWORD:-rehketo}@postgres:5432/rehketo
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY}
+      CSRF_SIGNING_KEY: ${CSRF_SIGNING_KEY}
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID}
+      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID}
+      ENTRA_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET}
+      ENTRA_REDIRECT_URI: ${ENTRA_REDIRECT_URI}
+      UI_POST_LOGIN_URL: ${UI_POST_LOGIN_URL}
+      DEVONLY_LOGIN_ENABLED: ${DEVONLY_LOGIN_ENABLED:-false}
+      BIFROST_BASE_URL: http://bifrost:8080/v1
+      BIFROST_API_KEY: ${BIFROST_API_KEY:-dev-noop}
+      AGENT_MODEL: ${AGENT_MODEL:-claude-sonnet-4-6}
+      # Set to the built SvelteKit bundle path inside the container to
+      # serve rehketo-ui same-origin. Unset = API-only (dev contributors run
+      # Vite separately on 5173).
+      UI_STATIC_DIR: ${UI_STATIC_DIR:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bifrost:
+        condition: service_started
+
+volumes:
+  pgdata:
