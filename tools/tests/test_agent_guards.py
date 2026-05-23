@@ -58,3 +58,11 @@ def test_single_permission_gate():
     v = g._check_permission_gate_tree(g.API_SRC / "api" / "foo.py", _ast.parse(bad))
     assert [x.line for x in v] == [1, 2]
     assert g._check_permission_gate_tree(g.PERMISSIONS_DIR / "check.py", _ast.parse(bad)) == []
+
+
+def test_permission_resource_id():
+    bad = "perms.require('a', resource_type='conversation')\n"
+    v = g._check_resource_id_tree(g.API_SRC / "api" / "foo.py", _ast.parse(bad))
+    assert [x.line for x in v] == [1]
+    ok = "perms.require('a', resource_type='conversation', resource_id=None)\n"
+    assert g._check_resource_id_tree(g.API_SRC / "api" / "foo.py", _ast.parse(ok)) == []

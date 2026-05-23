@@ -77,7 +77,11 @@ async def create_conversation(
     db: Annotated[AsyncSession, Depends(get_session)],
     perms: Annotated[ResolvedPermissions, Depends(resolve_permissions)],
 ) -> ConversationOut:
-    perms.require("chat.create_conversation", resource_type="conversation")
+    perms.require(
+        "chat.create_conversation",
+        resource_type="conversation",
+        resource_id=None,
+    )
     conv = Conversation(id=uuid4(), user_id=perms.user_id, title=payload.title)
     db.add(conv)
     await db.commit()
@@ -90,7 +94,11 @@ async def list_conversations(
     perms: Annotated[ResolvedPermissions, Depends(resolve_permissions)],
     include_archived: bool = False,
 ) -> ConversationList:
-    perms.require("chat.view_conversation", resource_type="conversation")
+    perms.require(
+        "chat.view_conversation",
+        resource_type="conversation",
+        resource_id=None,
+    )
     stmt = select(Conversation).where(Conversation.user_id == perms.user_id)
     if not include_archived:
         stmt = stmt.where(Conversation.archived_at.is_(None))

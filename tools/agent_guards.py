@@ -165,6 +165,32 @@ def check_single_permission_gate() -> list[Violation]:
 FILE_CHECKS["check-single-permission-gate"] = check_single_permission_gate
 
 
+# --- permission calls thread resource_id ------------------------------------
+
+
+def _check_resource_id_tree(path: Path, tree: ast.Module) -> list[Violation]:
+    out: list[Violation] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        kw = {k.arg for k in node.keywords if k.arg is not None}
+        if "resource_type" in kw and "resource_id" not in kw:
+            out.append(Violation(path, node.lineno,
+                "permission call passes resource_type but not resource_id "
+                "(thread it, even as resource_id=None — the OpenFGA contract)"))
+    return out
+
+
+def check_permission_resource_id() -> list[Violation]:
+    out: list[Violation] = []
+    for path in _py_files(API_SRC):
+        out.extend(_check_resource_id_tree(path, _parse(path)))
+    return out
+
+
+FILE_CHECKS["check-permission-resource-id"] = check_permission_resource_id
+
+
 def _run(checks: Iterable[Callable[[], list[Violation]]]) -> int:
     violations: list[Violation] = []
     for fn in checks:
