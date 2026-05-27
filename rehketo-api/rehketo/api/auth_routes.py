@@ -37,6 +37,10 @@ OAUTH_STATE_COOKIE = "rehketo_oauth_state"
 OAUTH_VERIFIER_COOKIE = "rehketo_oauth_verifier"
 OAUTH_NEXT_COOKIE = "rehketo_oauth_next"
 
+# First printable ASCII byte; anything below is a C0 control char and is
+# rejected from `?next=` paths (a control char can break out of a relative URL).
+MIN_PRINTABLE_BYTE = 0x20
+
 
 def _set_oauth_cookie(
     resp: RedirectResponse, name: str, value: str, *, secure: bool
@@ -77,7 +81,7 @@ def _is_safe_next(next_path: str) -> bool:
     # can all turn a "next=/x" into off-origin navigation. Reject them.
     if next_path.startswith(("//", "/\\")):
         return False
-    return all(ord(c) >= 0x20 for c in next_path)
+    return all(ord(c) >= MIN_PRINTABLE_BYTE for c in next_path)
 
 
 @router.get("/login")
