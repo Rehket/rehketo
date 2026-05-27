@@ -1,0 +1,18 @@
+name: Setup Python (api)
+description: Install uv, set up Python from rehketo-api/.python-version, and sync the locked api project
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8
+      with:
+        enable-cache: true
+    - name: Set up Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      with:
+        python-version-file: "rehketo-api/.python-version"
+    - name: Install the api project
+      run: uv sync --locked --dev
+      shell: bash
+      working-directory: rehketo-api
