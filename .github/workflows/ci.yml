@@ -1,0 +1,93 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.f.outputs.api }}
+      ui: ${{ steps.f.outputs.ui }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        with:
+          filters: |
+            api:
+              - 'rehketo-api/**'
+              - 'tools/**'
+              - 'AGENTS.md'
+            ui:
+              - 'rehketo-ui/**'
+              - 'tools/**'
+
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Must match the api's Python — agent_guards.py parses the api source
+          # via ast.parse; a lower Python can't parse newer grammar (e.g. 3.14
+          # accepts unparen'd `except A, B:` which 3.9 rejects).
+          python-version-file: rehketo-api/.python-version
+      - name: agent guards
+        run: python tools/agent_guards.py check
+      - name: guard + sync tests
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest tools/tests -q
+      - name: mirror drift
+        run: |
+          python tools/sync_agent_rules.py
+          git diff --exit-code AGENTS.md CLAUDE.md \
+            .github/copilot-instructions.md .cursor/rules/main.mdc
+
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rehketo-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: rehketo-api/.python-version
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --dev
+      - run: uv run ruff format --check
+      - run: uv run ruff check
+      - run: uv run mypy rehketo
+      - run: uv run bandit -r rehketo
+      - name: import-linter
+        run: bash ../tools/_lint_imports.sh
+      - run: uv run pytest
+      - name: contract snapshot
+        run: uv run python ../tools/check_contract.py
+
+  ui:
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rehketo-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: rehketo-ui/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run check
+      - run: pnpm run test:unit -- --run
