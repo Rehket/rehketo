@@ -9,6 +9,7 @@ fake agent yields many chunks so the run produces enough events to reliably
 consume 3 before disconnecting and reconnecting.  A small ``asyncio.sleep``
 between chunks keeps the run alive long enough for the reconnect.
 """
+
 from __future__ import annotations
 
 import asyncio

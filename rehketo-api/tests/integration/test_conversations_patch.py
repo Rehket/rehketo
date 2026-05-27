@@ -48,9 +48,7 @@ async def test_rename(settings_env, db_url, db) -> None:
     fresh_maker = async_sessionmaker(fresh_engine, expire_on_commit=False)
     async with fresh_maker() as fresh:
         row = (
-            await fresh.execute(
-                select(Conversation).where(Conversation.id == conv.id)
-            )
+            await fresh.execute(select(Conversation).where(Conversation.id == conv.id))
         ).scalar_one()
     await fresh_engine.dispose()
     assert row.title == "new"
@@ -74,9 +72,7 @@ async def test_archive(settings_env, db_url, db) -> None:
     fresh_maker = async_sessionmaker(fresh_engine, expire_on_commit=False)
     async with fresh_maker() as fresh:
         row = (
-            await fresh.execute(
-                select(Conversation).where(Conversation.id == conv.id)
-            )
+            await fresh.execute(select(Conversation).where(Conversation.id == conv.id))
         ).scalar_one()
     await fresh_engine.dispose()
     assert row.archived_at is not None

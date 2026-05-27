@@ -3,6 +3,7 @@
 Actively-using users stay logged in across days without an unbounded sliding
 window. Idle sessions still expire at their original expires_at.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -107,8 +108,10 @@ async def test_session_before_halfway_does_not_renew(
     await db.commit()
 
     original_expires = (
-        await db.execute(select(SessionRow).where(SessionRow.id == UUID(sid)))
-    ).scalar_one().expires_at
+        (await db.execute(select(SessionRow).where(SessionRow.id == UUID(sid))))
+        .scalar_one()
+        .expires_at
+    )
 
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
@@ -120,6 +123,8 @@ async def test_session_before_halfway_does_not_renew(
     assert SESSION_COOKIE not in set_cookie
 
     refreshed_expires = (
-        await db.execute(select(SessionRow).where(SessionRow.id == UUID(sid)))
-    ).scalar_one().expires_at
+        (await db.execute(select(SessionRow).where(SessionRow.id == UUID(sid))))
+        .scalar_one()
+        .expires_at
+    )
     assert refreshed_expires == original_expires

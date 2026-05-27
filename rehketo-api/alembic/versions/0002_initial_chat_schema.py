@@ -63,9 +63,7 @@ def upgrade() -> None:
         sa.Column("conversation_id", sa.UUID(), nullable=False),
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
-        sa.Column(
-            "error", postgresql.JSONB(astext_type=sa.Text()), nullable=True
-        ),
+        sa.Column("error", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("model", sa.Text(), nullable=False),
@@ -98,9 +96,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("conversation_id", sa.UUID(), nullable=False),
         sa.Column("role", sa.Text(), nullable=False),
-        sa.Column(
-            "content", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("run_id", sa.UUID(), nullable=True),
         sa.Column(
             "created_at",
@@ -133,9 +129,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("run_id", sa.UUID(), nullable=False),
         sa.Column("sequence", sa.BigInteger(), nullable=False),
-        sa.Column(
-            "payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -158,14 +152,10 @@ def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index(op.f("ix_run_events_run_id"), table_name="run_events")
     op.drop_table("run_events")
-    op.drop_index(
-        op.f("ix_messages_conversation_id"), table_name="messages"
-    )
+    op.drop_index(op.f("ix_messages_conversation_id"), table_name="messages")
     op.drop_table("messages")
     op.drop_index(op.f("ix_runs_user_id"), table_name="runs")
     op.drop_index(op.f("ix_runs_conversation_id"), table_name="runs")
     op.drop_table("runs")
-    op.drop_index(
-        op.f("ix_conversations_user_id"), table_name="conversations"
-    )
+    op.drop_index(op.f("ix_conversations_user_id"), table_name="conversations")
     op.drop_table("conversations")

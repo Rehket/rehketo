@@ -18,9 +18,13 @@ def _fake_id_token(
     sub: str = "sub-1", oid: str = "oid-1", email: str = "al@example.com"
 ) -> str:
     header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"sub": sub, "oid": oid, "email": email, "name": "Al"}).encode()
-    ).rstrip(b"=").decode()
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps({"sub": sub, "oid": oid, "email": email, "name": "Al"}).encode()
+        )
+        .rstrip(b"=")
+        .decode()
+    )
     return f"{header}.{payload}."
 
 

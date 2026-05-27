@@ -24,6 +24,6 @@ def issue_csrf_token(session_id: str) -> str:
 def verify_csrf_token(session_id: str, token: str) -> bool:
     try:
         payload: str = _serializer().loads(token, max_age=_max_age_seconds())
-    except (BadSignature, SignatureExpired):
+    except BadSignature, SignatureExpired:
         return False
     return payload == session_id

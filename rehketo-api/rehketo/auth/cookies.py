@@ -28,9 +28,7 @@ def set_session_cookie(
     )
 
 
-def set_csrf_cookie(
-    response: Response, token: str, *, max_age_seconds: int
-) -> None:
+def set_csrf_cookie(response: Response, token: str, *, max_age_seconds: int) -> None:
     s = get_settings()
     response.set_cookie(
         key=CSRF_COOKIE,

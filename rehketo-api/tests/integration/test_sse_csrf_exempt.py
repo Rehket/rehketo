@@ -8,6 +8,7 @@ This test verifies that behaviour: it POSTs a message (with CSRF) to create a
 run, then opens the SSE stream without supplying a CSRF token.  A 200 response
 proves that the middleware passes the GET through unchallenged.
 """
+
 from __future__ import annotations
 
 import asyncio

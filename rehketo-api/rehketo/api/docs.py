@@ -15,6 +15,7 @@ Workflow for a developer:
 2. Open /docs. All Try-it-out requests now include both cookies and the
    CSRF header automatically.
 """
+
 from __future__ import annotations
 
 from typing import Annotated

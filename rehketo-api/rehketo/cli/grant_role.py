@@ -2,6 +2,7 @@
 Bootstrap / admin CLI:
     uv run python -m rehketo.cli.grant_role alice@example.com Admin
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +25,8 @@ async def grant(email: str, role: str) -> int:
         exists = (
             await s.execute(
                 select(UserRole).where(
-                    UserRole.user_id == user.id, UserRole.role == role,
+                    UserRole.user_id == user.id,
+                    UserRole.role == role,
                 )
             )
         ).scalar_one_or_none()

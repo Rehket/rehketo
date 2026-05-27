@@ -6,6 +6,7 @@ delivered while the shielded finalizer is running does not strand the run
 in ``running`` status — the DB update + bus publish inside
 ``asyncio.shield(_finalize_cancel())`` both complete.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,9 +30,7 @@ if TYPE_CHECKING:
 
 
 class _NeverStreamingAgent:
-    async def astream(
-        self, *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[Any]:
+    async def astream(self, *args: Any, **kwargs: Any) -> AsyncGenerator[Any]:
         await asyncio.sleep(30)
         if False:
             yield  # pragma: no cover

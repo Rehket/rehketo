@@ -21,6 +21,7 @@ want to prove the agent can talk to the checkpointer:
 
     uv run pytest -m live_deps
 """
+
 from __future__ import annotations
 
 import pytest

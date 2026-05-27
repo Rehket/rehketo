@@ -4,6 +4,7 @@ The CSRFMiddleware is the real enforcer; this test pins the schema declaration
 so /docs and external codegen see the dependency, and so the scheme is applied
 to unsafe-method operations outside the CSRF-exempt prefixes.
 """
+
 from __future__ import annotations
 
 from rehketo.auth.csrf_middleware import CSRF_EXEMPT_PREFIXES

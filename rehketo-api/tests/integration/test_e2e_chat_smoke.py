@@ -4,6 +4,7 @@ Uses a fake build_agent (same pattern as test_run_agent_end_to_end.py) so no
 Bifrost / LLM network calls are made. Title generation is also patched to a
 no-op so the test doesn't wait on a DNS failure to the mock Bifrost host.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -46,9 +47,7 @@ async def test_full_chat_turn(
     monkeypatch.setattr(run_mod, "generate_title_if_needed", _no_title)
 
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://t"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         r = await c.post(
             "/auth/devonly/login",
             json={"email": "al@example.com", "roles": ["User"]},
@@ -90,8 +89,7 @@ async def test_full_chat_turn(
                     events.append(json.loads(line[6:]))
 
         assert any(
-            e["type"] == "run.status" and e.get("status") == "succeeded"
-            for e in events
+            e["type"] == "run.status" and e.get("status") == "succeeded" for e in events
         )
 
         # Detail shows both user and assistant messages

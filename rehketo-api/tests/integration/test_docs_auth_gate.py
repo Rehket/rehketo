@@ -1,4 +1,5 @@
 """Integration test — /docs and /openapi.json require an authenticated session."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

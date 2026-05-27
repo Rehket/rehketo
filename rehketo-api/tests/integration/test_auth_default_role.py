@@ -18,9 +18,13 @@ def _fake_id_token(
     sub: str = "sub-1", oid: str = "oid-1", email: str = "al@example.com"
 ) -> str:
     header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"sub": sub, "oid": oid, "email": email, "name": "Al"}).encode()
-    ).rstrip(b"=").decode()
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps({"sub": sub, "oid": oid, "email": email, "name": "Al"}).encode()
+        )
+        .rstrip(b"=")
+        .decode()
+    )
     return f"{header}.{payload}."
 
 
@@ -65,8 +69,10 @@ async def test_new_entra_user_receives_default_user_role(
     user_id = users[0].id
 
     roles = (
-        await db.execute(select(UserRole).where(UserRole.user_id == user_id))
-    ).scalars().all()
+        (await db.execute(select(UserRole).where(UserRole.user_id == user_id)))
+        .scalars()
+        .all()
+    )
     assert [r.role for r in roles] == ["User"]
 
 
@@ -117,6 +123,8 @@ async def test_returning_user_not_granted_duplicate_role(
     assert len(users) == 1
 
     roles = (
-        await db.execute(select(UserRole).where(UserRole.user_id == users[0].id))
-    ).scalars().all()
+        (await db.execute(select(UserRole).where(UserRole.user_id == users[0].id)))
+        .scalars()
+        .all()
+    )
     assert [r.role for r in roles] == ["User"]

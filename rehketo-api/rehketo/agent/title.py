@@ -33,13 +33,17 @@ async def generate_title_if_needed(conversation_id: UUID) -> str | None:
             if conv.title:
                 return None
             msgs = (
-                await db.execute(
-                    select(Message)
-                    .where(Message.conversation_id == conversation_id)
-                    .order_by(Message.created_at)
-                    .limit(4)
+                (
+                    await db.execute(
+                        select(Message)
+                        .where(Message.conversation_id == conversation_id)
+                        .order_by(Message.created_at)
+                        .limit(4)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         if not msgs:
             return None
 
@@ -54,9 +58,7 @@ async def generate_title_if_needed(conversation_id: UUID) -> str | None:
 
         model = build_chat_model()
         resp = await model.ainvoke(prompt)
-        title = (
-            (getattr(resp, "content", "") or "").strip().strip('"').strip(".")[:80]
-        )
+        title = (getattr(resp, "content", "") or "").strip().strip('"').strip(".")[:80]
         if not title:
             return None
 
@@ -69,7 +71,5 @@ async def generate_title_if_needed(conversation_id: UUID) -> str | None:
             await db.commit()
         return title
     except Exception:  # broad catch intentional — swallow all failures
-        logger.exception(
-            "title generation failed for conversation %s", conversation_id
-        )
+        logger.exception("title generation failed for conversation %s", conversation_id)
         return None

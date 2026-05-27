@@ -30,18 +30,20 @@ async def _load_history(
     set by `build_agent` via create_deep_agent(system_prompt=...); do NOT
     prepend one here or the model sees the same prompt twice."""
     msgs = (
-        await db.execute(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at)
+        (
+            await db.execute(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     result: list[AIMessage | HumanMessage | SystemMessage] = []
     for m in msgs:
         text = (
-            m.content
-            if isinstance(m.content, str)
-            else str(m.content.get("text", ""))
+            m.content if isinstance(m.content, str) else str(m.content.get("text", ""))
         )
         if m.role == "user":
             result.append(HumanMessage(content=text))
@@ -57,7 +59,9 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
         conversation_id: UUID = run.conversation_id
 
         await db.execute(
-            update(Run).where(Run.id == run_id).values(
+            update(Run)
+            .where(Run.id == run_id)
+            .values(
                 status="running",
                 started_at=datetime.now(UTC),
             )
@@ -94,7 +98,9 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                 )
             )
             await db.execute(
-                update(Run).where(Run.id == run_id).values(
+                update(Run)
+                .where(Run.id == run_id)
+                .values(
                     status="succeeded",
                     finished_at=datetime.now(UTC),
                 )
@@ -110,9 +116,7 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
             # then replace its streaming bubble with a server-authoritative
             # object (same id, same created_at on reload).
             persisted = (
-                await db.execute(
-                    select(Message).where(Message.id == assistant_id)
-                )
+                await db.execute(select(Message).where(Message.id == assistant_id))
             ).scalar_one()
             message_payload: dict[str, object] = {
                 "id": str(persisted.id),
@@ -179,7 +183,9 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                 )
             )
             await db.execute(
-                update(Run).where(Run.id == run_id).values(
+                update(Run)
+                .where(Run.id == run_id)
+                .values(
                     status="failed",
                     error={"code": "llm_failure", "message": str(exc)},
                     finished_at=datetime.now(UTC),
@@ -220,7 +226,9 @@ async def run_agent(run_id: UUID, bus: RunEventBus) -> None:
                     )
                 )
                 await db.execute(
-                    update(Run).where(Run.id == run_id).values(
+                    update(Run)
+                    .where(Run.id == run_id)
+                    .values(
                         status="cancelled",
                         finished_at=datetime.now(UTC),
                     )

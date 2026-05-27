@@ -1,6 +1,7 @@
 """Integration tests — partial assistant text is persisted on cancel and fail,
 and MessageOut surfaces run_status + run_error on reload.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -280,9 +281,7 @@ async def test_user_message_has_no_run_status(
 
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
-        r = await c.get(
-            f"/conversations/{conv.id}", cookies={SESSION_COOKIE: str(sid)}
-        )
+        r = await c.get(f"/conversations/{conv.id}", cookies={SESSION_COOKIE: str(sid)})
     user_msg = r.json()["messages"][0]
     assert user_msg["role"] == "user"
     assert user_msg["run_status"] is None

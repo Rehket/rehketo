@@ -5,6 +5,7 @@ page appends `?next=...` to `/auth/login`, and the callback must honor it.
 Without this round-trip, any signed-in user always lands on the default
 post-login URL — the "Chrome took me to the wrong page initially" bug.
 """
+
 from __future__ import annotations
 
 import base64
@@ -20,11 +21,15 @@ from rehketo.main import create_app
 
 def _fake_id_token() -> str:
     header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
-    payload = base64.urlsafe_b64encode(
-        json.dumps(
-            {"sub": "sub-n", "oid": "oid-n", "email": "n@example.com", "name": "N"}
-        ).encode()
-    ).rstrip(b"=").decode()
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                {"sub": "sub-n", "oid": "oid-n", "email": "n@example.com", "name": "N"}
+            ).encode()
+        )
+        .rstrip(b"=")
+        .decode()
+    )
     return f"{header}.{payload}."
 
 

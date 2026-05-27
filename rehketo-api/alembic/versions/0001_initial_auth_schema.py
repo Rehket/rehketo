@@ -40,9 +40,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.execute(
-        "ALTER TABLE users ALTER COLUMN email TYPE citext USING email::citext"
-    )
+    op.execute("ALTER TABLE users ALTER COLUMN email TYPE citext USING email::citext")
     op.create_table(
         "connections",
         sa.Column("id", sa.UUID(), nullable=False),
@@ -111,9 +109,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_sessions_user_id"), "sessions", ["user_id"], unique=False
-    )
+    op.create_index(op.f("ix_sessions_user_id"), "sessions", ["user_id"], unique=False)
     op.create_table(
         "user_roles",
         sa.Column("user_id", sa.UUID(), nullable=False),

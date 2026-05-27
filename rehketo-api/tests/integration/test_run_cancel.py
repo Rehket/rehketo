@@ -11,6 +11,7 @@ uses ``from rehketo.agent.graph import build_agent``, which binds the name
 ``rehketo.agent.graph.build_agent`` would NOT intercept calls made by
 ``run_agent`` because the local binding is already resolved at import time.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,9 +37,7 @@ if TYPE_CHECKING:
 class _NeverStreamingAgent:
     """Fake agent whose astream blocks for 30 s — long enough for cancel to fire."""
 
-    async def astream(
-        self, *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[Any]:
+    async def astream(self, *args: Any, **kwargs: Any) -> AsyncGenerator[Any]:
         await asyncio.sleep(30)
         # Unreachable; just satisfies the async generator protocol.
         if False:

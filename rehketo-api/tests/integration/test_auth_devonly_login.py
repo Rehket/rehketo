@@ -15,9 +15,7 @@ async def test_devonly_login_creates_session(
     settings_env: pytest.MonkeyPatch, db_url: str, db: AsyncSession
 ) -> None:
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://t"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         r = await c.post(
             "/auth/devonly/login",
             json={"email": "al@example.com", "display_name": "Al", "roles": ["User"]},
@@ -41,9 +39,7 @@ async def test_devonly_login_returns_404_when_disabled(
     get_settings.cache_clear()
 
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://t"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         r = await c.post(
             "/auth/devonly/login",
             json={"email": "al@example.com"},

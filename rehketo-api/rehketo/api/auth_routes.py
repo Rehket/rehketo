@@ -166,15 +166,11 @@ async def callback(
     db: Annotated[AsyncSession, Depends(db_session)],
     code: Annotated[str, Query()],
     state: Annotated[str, Query()],
-    rehketo_oauth_state: Annotated[
-        str | None, Cookie(alias=OAUTH_STATE_COOKIE)
-    ] = None,
+    rehketo_oauth_state: Annotated[str | None, Cookie(alias=OAUTH_STATE_COOKIE)] = None,
     rehketo_oauth_verifier: Annotated[
         str | None, Cookie(alias=OAUTH_VERIFIER_COOKIE)
     ] = None,
-    rehketo_oauth_next: Annotated[
-        str | None, Cookie(alias=OAUTH_NEXT_COOKIE)
-    ] = None,
+    rehketo_oauth_next: Annotated[str | None, Cookie(alias=OAUTH_NEXT_COOKIE)] = None,
 ) -> Response:
     if not rehketo_oauth_state or not rehketo_oauth_verifier:
         raise HTTPException(status_code=400, detail="missing oauth transient state")
@@ -225,9 +221,7 @@ async def callback(
 async def logout(
     db: Annotated[AsyncSession, Depends(db_session)],
     response: Response,
-    rehketo_session: Annotated[
-        str | None, Cookie(alias=SESSION_COOKIE)
-    ] = None,
+    rehketo_session: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
 ) -> Response:
     if rehketo_session:
         with contextlib.suppress(ValueError):

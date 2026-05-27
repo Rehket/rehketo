@@ -18,6 +18,7 @@ Assertions:
 - Exactly one ``message.complete`` event.
 - An assistant ``Message`` row is persisted in the DB with the streamed content.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -116,9 +117,7 @@ async def test_run_produces_streamed_assistant_message(
 
     # Must see at least two run.status events (running + terminal).
     assert types.count("run.status") >= 2
-    terminal = next(
-        e for e in reversed(events) if e["type"] == "run.status"
-    )
+    terminal = next(e for e in reversed(events) if e["type"] == "run.status")
     assert terminal["status"] == "succeeded"
 
     # Must see message deltas.

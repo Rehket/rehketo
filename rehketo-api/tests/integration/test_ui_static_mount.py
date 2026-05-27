@@ -1,5 +1,6 @@
 """Integration test — UI_STATIC_DIR mount serves the built bundle with SPA
 fallback, and API routes still take precedence over the catch-all."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

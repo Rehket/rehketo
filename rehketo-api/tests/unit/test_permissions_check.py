@@ -24,16 +24,19 @@ def test_user_has_basic_chat_actions():
 
 
 def test_check_permission_allows():
-    assert check_permission({"User"}, "chat.write",
-                            resource_type="conversation", resource_id=uuid4())
+    assert check_permission(
+        {"User"}, "chat.write", resource_type="conversation", resource_id=uuid4()
+    )
 
 
 def test_check_permission_denies():
-    assert not check_permission({"User"}, "admin.manage_users",
-                                resource_type="system", resource_id=None)
+    assert not check_permission(
+        {"User"}, "admin.manage_users", resource_type="system", resource_id=None
+    )
 
 
 def test_check_permission_rejects_unknown_action():
     with pytest.raises(PermissionError):
-        check_permission({"User"}, "not.a.real.action",
-                         resource_type=None, resource_id=None)
+        check_permission(
+            {"User"}, "not.a.real.action", resource_type=None, resource_id=None
+        )

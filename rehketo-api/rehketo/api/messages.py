@@ -62,19 +62,23 @@ async def post_message(
     message_id = uuid4()
     run_id = uuid4()
 
-    db.add(Message(
-        id=message_id,
-        conversation_id=conv.id,
-        role="user",
-        content={"text": payload.content},
-    ))
-    db.add(Run(
-        id=run_id,
-        conversation_id=conv.id,
-        user_id=perms.user_id,
-        status="queued",
-        model=settings.agent_model,
-    ))
+    db.add(
+        Message(
+            id=message_id,
+            conversation_id=conv.id,
+            role="user",
+            content={"text": payload.content},
+        )
+    )
+    db.add(
+        Run(
+            id=run_id,
+            conversation_id=conv.id,
+            user_id=perms.user_id,
+            status="queued",
+            model=settings.agent_model,
+        )
+    )
     conv.updated_at = datetime.now(UTC)
     await db.commit()
 

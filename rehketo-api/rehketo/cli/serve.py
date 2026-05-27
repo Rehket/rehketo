@@ -12,6 +12,7 @@ SelectorEventLoop and DB calls in the lifespan + request handlers work.
 
 Use `uv run uvicorn rehketo.main:app ...` directly ONLY on non-Windows.
 """
+
 from __future__ import annotations
 
 import asyncio

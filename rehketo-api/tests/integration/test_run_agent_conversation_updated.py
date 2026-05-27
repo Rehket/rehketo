@@ -11,6 +11,7 @@ This frees the UI from waiting on title generation to stop showing a stale
 Patches both ``build_agent`` and ``generate_title_if_needed`` to avoid any
 LLM calls.
 """
+
 from __future__ import annotations
 
 import asyncio

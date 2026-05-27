@@ -2,6 +2,7 @@
 The single permission gate. v1 implements role-based permissions;
 at the OpenFGA cutover only this module's body changes.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

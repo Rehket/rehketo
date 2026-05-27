@@ -36,9 +36,7 @@ async def me(
     db: Annotated[AsyncSession, Depends(get_session)],
     perms: Annotated[ResolvedPermissions, Depends(resolve_permissions)],
 ) -> MeOut:
-    user = (
-        await db.execute(select(User).where(User.id == perms.user_id))
-    ).scalar_one()
+    user = (await db.execute(select(User).where(User.id == perms.user_id))).scalar_one()
     return MeOut(
         id=user.id,
         display_name=user.display_name,

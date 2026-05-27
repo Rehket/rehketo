@@ -1,6 +1,7 @@
 """Integration test — POST /runs/{id}/cancel on an already-terminal run
 returns 409, not 204. Prevents the UI from silently "succeeding" a cancel
 against a run that finished a moment ago."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

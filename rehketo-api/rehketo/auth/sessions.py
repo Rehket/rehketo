@@ -50,9 +50,7 @@ async def get_active_session(
 async def revoke_session(db: AsyncSession, session_id: UUID | str) -> None:
     now = datetime.now(UTC)
     await db.execute(
-        update(SessionRow)
-        .where(SessionRow.id == session_id)
-        .values(revoked_at=now)
+        update(SessionRow).where(SessionRow.id == session_id).values(revoked_at=now)
     )
     await db.commit()
 

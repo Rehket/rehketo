@@ -102,9 +102,7 @@ def _encode_sse_event(event: dict[str, object]) -> dict[str, str]:
     }
 
 
-_TERMINAL_RUN_STATES: frozenset[str] = frozenset(
-    {"succeeded", "failed", "cancelled"}
-)
+_TERMINAL_RUN_STATES: frozenset[str] = frozenset({"succeeded", "failed", "cancelled"})
 
 
 @router.post("/{run_id}/cancel", status_code=204)

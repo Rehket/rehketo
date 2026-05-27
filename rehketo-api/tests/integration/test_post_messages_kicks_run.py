@@ -56,13 +56,17 @@ async def test_posting_a_message_creates_row_and_kicks_off_run(
 
     # User message was persisted
     msgs = (
-        await db.execute(select(Message).where(Message.conversation_id == conv.id))
-    ).scalars().all()
+        (await db.execute(select(Message).where(Message.conversation_id == conv.id)))
+        .scalars()
+        .all()
+    )
     assert any(m.role == "user" and m.content.get("text") == "hello" for m in msgs)
 
     # Run row exists
     runs = (
-        await db.execute(select(Run).where(Run.conversation_id == conv.id))
-    ).scalars().all()
+        (await db.execute(select(Run).where(Run.conversation_id == conv.id)))
+        .scalars()
+        .all()
+    )
     assert len(runs) == 1
     assert runs[0].status in ("queued", "running", "succeeded", "failed")

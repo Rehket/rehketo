@@ -78,9 +78,7 @@ def _sa_url(pg: PostgresContainer) -> str:
 
 
 @pytest.fixture
-def db_url(
-    _pg: PostgresContainer, monkeypatch: pytest.MonkeyPatch
-) -> Generator[str]:
+def db_url(_pg: PostgresContainer, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
     url = _sa_url(_pg)
     monkeypatch.setenv("DATABASE_URL", url)
     from rehketo.config import get_settings

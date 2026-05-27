@@ -6,6 +6,7 @@ verify authorized route rejects.
 Single cycle; all routes touched in order to prove Plan 1's slice is wired
 end-to-end.
 """
+
 from __future__ import annotations
 
 from httpx import ASGITransport, AsyncClient
@@ -16,9 +17,7 @@ from rehketo.main import create_app
 
 async def test_full_lifecycle(settings_env, db_url) -> None:
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://t"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         # Login via devonly
         r = await c.post(
             "/auth/devonly/login",
@@ -46,8 +45,10 @@ async def test_full_lifecycle(settings_env, db_url) -> None:
 
         # Create
         r = await c.post(
-            "/conversations", json={},
-            cookies=auth_cookies, headers=auth_headers,
+            "/conversations",
+            json={},
+            cookies=auth_cookies,
+            headers=auth_headers,
         )
         assert r.status_code == 201
         conv_id = r.json()["id"]
@@ -68,7 +69,8 @@ async def test_full_lifecycle(settings_env, db_url) -> None:
         r = await c.patch(
             f"/conversations/{conv_id}",
             json={"title": "named"},
-            cookies=auth_cookies, headers=auth_headers,
+            cookies=auth_cookies,
+            headers=auth_headers,
         )
         assert r.status_code == 200
         assert r.json()["title"] == "named"
@@ -76,7 +78,8 @@ async def test_full_lifecycle(settings_env, db_url) -> None:
         # Soft-delete via DELETE
         r = await c.delete(
             f"/conversations/{conv_id}",
-            cookies=auth_cookies, headers=auth_headers,
+            cookies=auth_cookies,
+            headers=auth_headers,
         )
         assert r.status_code == 204
 
@@ -86,9 +89,7 @@ async def test_full_lifecycle(settings_env, db_url) -> None:
         assert r.json()["items"] == []
 
         # Logout revokes the session (CSRF-enforced)
-        r = await c.post(
-            "/auth/logout", cookies=auth_cookies, headers=auth_headers
-        )
+        r = await c.post("/auth/logout", cookies=auth_cookies, headers=auth_headers)
         assert r.status_code == 204
 
         # Subsequent authorized call rejected

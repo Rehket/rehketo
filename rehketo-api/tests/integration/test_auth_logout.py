@@ -30,9 +30,7 @@ async def test_logout_revokes_session(
     csrf = issue_csrf_token(str(sid))
 
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://t"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         r = await c.post(
             "/auth/logout",
             cookies={SESSION_COOKIE: str(sid), CSRF_COOKIE: csrf},
@@ -61,9 +59,7 @@ async def test_logout_without_csrf_is_forbidden(
     )
 
     app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://t"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         r = await c.post("/auth/logout", cookies={SESSION_COOKIE: str(sid)})
     assert r.status_code == 403
 
