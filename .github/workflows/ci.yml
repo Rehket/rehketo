@@ -11,7 +11,7 @@ jobs:
       api: ${{ steps.f.outputs.api }}
       ui: ${{ steps.f.outputs.ui }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: f
         with:
@@ -27,7 +27,7 @@ jobs:
   guards:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           # Must match the api's Python — agent_guards.py parses the api source
@@ -54,7 +54,7 @@ jobs:
       run:
         working-directory: rehketo-api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version-file: rehketo-api/.python-version
@@ -80,7 +80,7 @@ jobs:
       run:
         working-directory: rehketo-ui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
