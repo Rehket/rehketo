@@ -12,6 +12,7 @@ from sqlalchemy import (
     LargeBinary,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -31,7 +32,7 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(Text)
     email: Mapped[str | None] = mapped_column(Text)  # citext handled via migration
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 
@@ -44,7 +45,7 @@ class Identity(Base):
         PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 
@@ -63,7 +64,7 @@ class Session(Base):
         DateTime(timezone=True), nullable=False
     )
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -85,7 +86,7 @@ class Connection(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -112,10 +113,10 @@ class Conversation(Base):
     )
     title: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -141,7 +142,7 @@ class Run(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     model: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
@@ -170,7 +171,7 @@ class Message(Base):
         PGUUID(as_uuid=True), ForeignKey("runs.id")
     )
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (
@@ -190,7 +191,7 @@ class RunEvent(Base):
     sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), server_default="now()", nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     __table_args__ = (UniqueConstraint("run_id", "sequence"),)
