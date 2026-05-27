@@ -43,11 +43,13 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-# Skip tests that hit real external dependencies by default. Opt in with:
-#   uv run pytest -m live_deps
-addopts = "-m 'not live_deps'"
+# Skip slow/external tests by default. Opt in with:
+#   uv run pytest -m live_deps   # tests hitting real Bifrost / Anthropic
+#   uv run pytest -m e2e         # full offline browser tests (Playwright)
+addopts = "-m 'not live_deps and not e2e'"
 markers = [
     "live_deps: tests that hit real external services (the checkpointer, Bifrost, Anthropic). Skipped unless you pass -m live_deps.",
+    "e2e: full-stack offline browser tests driven by Playwright via the rehketo-api/tests/e2e/ pytest fixtures. Skipped unless you pass -m e2e.",
 ]
 
 [tool.uv]
