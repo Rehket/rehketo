@@ -1,0 +1,98 @@
+# Rehketo monorepo pre-commit hooks.
+# Install:  uv run --project rehketo-api pre-commit install --hook-type pre-commit --hook-type commit-msg
+# Run all:  uv run --project rehketo-api pre-commit run --all-files
+minimum_pre_commit_version: "3.5.0"
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert]
+
+  - repo: local
+    hooks:
+      # ---- commit hygiene (commit-msg stage) ----
+      - id: no-ai-attribution
+        name: no-ai-attribution
+        # uv pins the api's Python (3.14) so AST parsers and language features match the target.
+        entry: uv run --project rehketo-api python tools/agent_guards.py commit-msg
+        language: system
+        stages: [commit-msg]
+
+      # ---- repo-wide guards ----
+      - id: agent-guards
+        name: agent-guards
+        entry: uv run --project rehketo-api python tools/agent_guards.py check
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: sync-agent-rules
+        name: sync-agent-rules
+        entry: uv run --project rehketo-api python tools/sync_agent_rules.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # ---- rehketo-api (Python) ----
+      - id: api-ruff-format
+        name: api-ruff-format
+        entry: bash -c 'cd rehketo-api && uv run ruff format --check'
+        language: system
+        files: ^rehketo-api/
+        types: [python]
+        pass_filenames: false
+      - id: api-ruff
+        name: api-ruff
+        entry: bash -c 'cd rehketo-api && uv run ruff check'
+        language: system
+        files: ^rehketo-api/
+        types: [python]
+        pass_filenames: false
+      - id: api-mypy
+        name: api-mypy
+        entry: bash -c 'cd rehketo-api && uv run mypy rehketo'
+        language: system
+        files: ^rehketo-api/
+        types: [python]
+        pass_filenames: false
+      - id: api-bandit
+        name: api-bandit
+        entry: bash -c 'cd rehketo-api && uv run bandit -r rehketo'
+        language: system
+        files: ^rehketo-api/
+        types: [python]
+        pass_filenames: false
+      - id: api-import-linter
+        name: api-import-linter
+        entry: bash tools/_lint_imports.sh
+        language: system
+        files: ^rehketo-api/
+        types: [python]
+        pass_filenames: false
+
+      # ---- rehketo-ui (Node) ----
+      - id: ui-prettier
+        name: ui-prettier
+        entry: bash -c 'cd rehketo-ui && corepack pnpm exec prettier --check .'
+        language: system
+        files: ^rehketo-ui/
+        pass_filenames: false
+      - id: ui-eslint
+        name: ui-eslint
+        entry: bash -c 'cd rehketo-ui && corepack pnpm exec eslint .'
+        language: system
+        files: ^rehketo-ui/
+        pass_filenames: false
+      - id: ui-svelte-check
+        name: ui-svelte-check
+        entry: bash -c 'cd rehketo-ui && corepack pnpm run check'
+        language: system
+        files: ^rehketo-ui/
+        pass_filenames: false
+      - id: ui-vitest
+        name: ui-vitest
+        entry: bash -c 'cd rehketo-ui && corepack pnpm run test:unit -- --run'
+        language: system
+        files: ^rehketo-ui/
+        pass_filenames: false

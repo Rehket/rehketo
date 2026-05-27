@@ -68,8 +68,10 @@ step passed.
 
 Repo-wide (from root):
 ```bash
-python3 tools/agent_guards.py check
-python3 tools/sync_agent_rules.py --check
+# `uv run --project rehketo-api python` pins the api's Python 3.14 — agent_guards
+# uses ast.parse against the api source, so a 3.9 `python3` shim would crash.
+uv run --project rehketo-api python tools/agent_guards.py check
+uv run --project rehketo-api python tools/sync_agent_rules.py --check
 ```
 
 rehketo-api (from `rehketo-api/`):

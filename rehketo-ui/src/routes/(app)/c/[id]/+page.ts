@@ -13,10 +13,9 @@ export const load: PageLoad = async ({ params, url }) => {
 		// via its own throw redirect(). If this load also fires the
 		// auth-expired hook, two gotos race and the `next=` param ends up
 		// double-encoded — "/login?next=/login?next=/c/x".
-		const detail = await apiFetch<ConversationDetail>(
-			`/conversations/${params.id}`,
-			{ skipAuthRedirect: true }
-		);
+		const detail = await apiFetch<ConversationDetail>(`/conversations/${params.id}`, {
+			skipAuthRedirect: true
+		});
 		return { conversation: detail };
 	} catch (err) {
 		if (err instanceof ApiError) {
