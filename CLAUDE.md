@@ -106,6 +106,9 @@ pnpm run test:unit -- --run
 - `rehketo-ui/` — SvelteKit frontend. See `rehketo-ui/AGENTS.md`.
 - `tools/` — repo guardrails (`agent_guards.py`), mirror generator
   (`sync_agent_rules.py`), contract check (`check_contract.py`), and their tests.
+- `justfile` — local launch recipes (`just db`, `just api`, `just ui`,
+  `just db-down`). One recipe per process; run each in its own terminal in the
+  order the API README documents.
 - `docs/superpowers/{specs,plans}/` — design specs and implementation plans.
 - `AGENTS.md` + mirrors — this file and its generated copies.
 
