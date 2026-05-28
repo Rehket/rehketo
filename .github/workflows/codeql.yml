@@ -1,0 +1,60 @@
+name: "CodeQL Advanced"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+    # Docs-only PRs don't change analyzed code; skip them.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.cursor/rules/main.mdc'
+  schedule:
+    - cron: '33 23 * * 1'
+
+# Cancel superseded PR runs only — push/schedule runs publish the
+# authoritative Security-tab snapshot and shouldn't be interrupted.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - language: actions
+          build-mode: none
+        - language: javascript-typescript
+          build-mode: none
+        - language: python
+          build-mode: none
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+        # security-extended adds taint-flow, deserialization, and auth
+        # weakness queries beyond the default `security` suite. Quality
+        # queries are skipped because ruff/mypy/eslint/svelte-check cover them.
+        queries: security-extended
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+      with:
+        category: "/language:${{matrix.language}}"
