@@ -26,7 +26,7 @@ from rehketo.api.errors import install_error_handlers
 from rehketo.auth.cookies import CSRF_HEADER
 from rehketo.auth.csrf_middleware import CSRF_EXEMPT_PREFIXES, CSRFMiddleware
 from rehketo.auth.dependencies import AuthContext, resolve_session
-from rehketo.config import get_settings
+from rehketo.config import get_settings, get_ui_static_dir
 from rehketo.core.logging import get_logger
 from rehketo.runs.event_bus import InProcessEventBus
 from rehketo.runs.registry import get_registry
@@ -140,21 +140,22 @@ def _mount_ui_static_bundle_if_configured(app: FastAPI) -> None:
     full page load. API routers (auth, conversations, runs, me, docs,
     openapi.json, healthz) are registered first so their paths win over this
     catch-all. A no-op when UI_STATIC_DIR is unset (dev runs the UI under
-    Vite separately)."""
-    settings = get_settings()
-    if not settings.ui_static_dir:
+    Vite separately).
+
+    UI_STATIC_DIR is read via get_ui_static_dir() rather than get_settings()
+    because create_app() runs at module import; instantiating full Settings
+    here would require every production secret and break test collection."""
+    ui_static_dir = get_ui_static_dir()
+    if not ui_static_dir:
         return
-    ui_dir = Path(settings.ui_static_dir)
+    ui_dir = Path(ui_static_dir)
     if not ui_dir.is_dir():
-        logger.warning(
-            "UI_STATIC_DIR is set but does not exist: %s", settings.ui_static_dir
-        )
+        logger.warning("UI_STATIC_DIR is set but does not exist: %s", ui_static_dir)
         return
     index_html = ui_dir / "index.html"
     if not index_html.is_file():
         logger.warning(
-            "UI_STATIC_DIR has no index.html, skipping mount: %s",
-            settings.ui_static_dir,
+            "UI_STATIC_DIR has no index.html, skipping mount: %s", ui_static_dir
         )
         return
 
