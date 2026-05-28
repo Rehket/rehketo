@@ -20,7 +20,11 @@ def _base_env(monkeypatch) -> None:
 def test_settings_load_from_env(monkeypatch):
     _base_env(monkeypatch)
 
-    s = Settings()
+    # _env_file=None bypasses the .env file declared on SettingsConfigDict so
+    # the test exercises only the env-var path. Without this, a developer's
+    # local rehketo-api/.env (with values like DEVONLY_LOGIN_ENABLED=true)
+    # bleeds into the default-value assertions below.
+    s = Settings(_env_file=None)
 
     assert s.app_env == "test"
     assert s.cookie_secure is False
@@ -34,7 +38,7 @@ def test_agent_settings_load_from_env(monkeypatch):
     monkeypatch.setenv("BIFROST_API_KEY", "test-key")
     monkeypatch.setenv("AGENT_MODEL", "claude-sonnet-4-6")
 
-    s = Settings()
+    s = Settings(_env_file=None)
 
     assert s.bifrost_base_url == "http://bifrost-mock/v1"
     assert s.bifrost_api_key.get_secret_value() == "test-key"

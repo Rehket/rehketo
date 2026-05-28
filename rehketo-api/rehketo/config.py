@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 from pydantic import Field, SecretStr
@@ -30,13 +31,16 @@ class Settings(BaseSettings):
     bifrost_api_key: SecretStr = SecretStr("dev-noop")
     agent_model: str = "claude-sonnet-4-6"
 
-    # Absolute path to the built SvelteKit static bundle (index.html + assets).
-    # When set, FastAPI mounts it at / with SPA fallback. Unset in dev — the
-    # UI runs under the Vite dev server on :5173 and proxies /auth, /conversations,
-    # /runs, /me, etc. to the backend.
-    ui_static_dir: str | None = None
-
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def get_ui_static_dir() -> str | None:
+    """Direct env read, deliberately bypassing Settings(). The UI mount runs
+    inside create_app() at import time; instantiating Settings there would
+    require all 8 production secrets and break test collection plus
+    tools/check_contract.py. UI_STATIC_DIR is a deployment knob (set in
+    deploy/docker-compose.yaml, unset in dev), not application config."""
+    return os.environ.get("UI_STATIC_DIR")
