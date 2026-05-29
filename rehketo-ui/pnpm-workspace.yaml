@@ -1,3 +1,7 @@
+# Ignore package versions published within the last day, so a freshly released
+# (and possibly compromised or broken) version isn't pulled in immediately.
+# Mirrors the api's `[tool.uv] exclude-newer = "1 days"`. Value is in minutes.
+minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - cookie@0.7.0
   - svelte@5.55.7
